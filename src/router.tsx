@@ -40,6 +40,7 @@ export const router = createBrowserRouter([
       { path: 'trends', element: <Placeholder name="מגמות זמינות" /> },
       { path: 'import', element: <Placeholder name="ייבוא מקובץ" /> },
       { path: 'sheets', element: <Placeholder name="בחירת גיליון" /> },
+      { path: '*', element: <Navigate to="/diary" replace /> },
     ],
   },
 ])

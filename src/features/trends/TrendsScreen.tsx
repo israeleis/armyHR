@@ -105,6 +105,10 @@ export function TrendsScreen() {
   const chartData = useMemo(() => {
     if (!data) return []
 
+    // Debug: remove after confirming filter works
+    const allKeys = [...new Set(data.statuses.map(e => e.dateKey))].sort()
+    console.log('[Trends] tab:', activeTab, '| cutoff:', cutoffDateKey, '| dateKeys:', allKeys)
+
     const totalByDate = new Map<string, { date: Date; total: number; present: number }>()
 
     for (const entry of data.statuses) {

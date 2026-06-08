@@ -24,8 +24,10 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* Minimum touch target for glove/vehicle use */
-button, [role="button"], a {
+/* Minimum touch target for glove/vehicle use — standalone elements only */
+button,
+[role="button"],
+a:not(:where(p a, li a, span a)) {
   min-height: 44px;
   min-width: 44px;
 }

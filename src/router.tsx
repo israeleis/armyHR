@@ -3,6 +3,7 @@ import { BottomNav } from '@/components/BottomNav'
 import { OfflineBadge } from '@/components/OfflineBadge'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
+import { DiaryScreen } from '@/features/diary/DiaryScreen'
 
 // Placeholder for screens implemented in later tasks
 function Placeholder({ name }: { name: string }) {
@@ -36,7 +37,7 @@ export const router = createBrowserRouter([
     path: '/',
     element: <AppLayout />,
     children: [
-      { path: 'diary', element: <Placeholder name="יומן מצבת כוח אדם" /> },
+      { path: 'diary', element: <DiaryScreen /> },
       { path: 'diary/:date', element: <Placeholder name="פירוט יומי" /> },
       { path: 'soldier/:id', element: <Placeholder name="הסטטוס שלי" /> },
       { path: 'trends', element: <Placeholder name="מגמות זמינות" /> },

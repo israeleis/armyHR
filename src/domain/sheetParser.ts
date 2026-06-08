@@ -1,5 +1,5 @@
 import { parse, isValid } from 'date-fns'
-import type { CellCoord, ParseResult, SheetSchema, SoldierFields, StatusEntry } from './types'
+import type { ParseResult, SheetSchema, SoldierFields, StatusEntry } from './types'
 
 // Canonical field aliases (normalised: lowercase, no spaces, no Hebrew vowels)
 const SOLDIER_ALIASES: Record<string, string> = {

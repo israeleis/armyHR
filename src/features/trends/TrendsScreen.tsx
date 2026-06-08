@@ -16,23 +16,27 @@ const PERIOD_DAYS: Record<TimeTab, number | null> = {
 
 const PRESENT_CODE = 'נ'
 
-// ── Period slider ──────────────────────────────────────────────────────────
+function toDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// ── Period segmented slider ────────────────────────────────────────────────
+//
+// RTL layout: TIME_TABS[0] (שבועי) renders on the RIGHT, TIME_TABS[2] on the LEFT.
+// The sliding pill's CSS left% = (n-1-activeIdx)/(n-1) * segmentWidth because
+// RTL flex reverses visual order while CSS coordinates remain LTR.
 
 function PeriodSlider({ value, onChange }: { value: TimeTab; onChange: (t: TimeTab) => void }) {
-  const trackRef = useRef<HTMLDivElement>(null)
-  const maxIdx = TIME_TABS.length - 1
+  const containerRef = useRef<HTMLDivElement>(null)
+  const n = TIME_TABS.length
   const activeIdx = TIME_TABS.indexOf(value)
 
-  // RTL layout: index 0 (שבועי) = rightmost, index maxIdx (כל הזמן) = leftmost
-  // thumb left% = (maxIdx - activeIdx) / maxIdx * 100
-  const leftPct = ((maxIdx - activeIdx) / maxIdx) * 100
-
   function idxFromClientX(clientX: number): number {
-    if (!trackRef.current) return activeIdx
-    const { left, width } = trackRef.current.getBoundingClientRect()
-    // RTL: right side = low index (שבועי), left side = high index (כל הזמן)
+    if (!containerRef.current) return activeIdx
+    const { left, width } = containerRef.current.getBoundingClientRect()
+    // In RTL: right side = index 0, left side = index n-1
     const fractionFromRight = 1 - Math.max(0, Math.min(1, (clientX - left) / width))
-    return Math.round(fractionFromRight * maxIdx)
+    return Math.round(fractionFromRight * (n - 1))
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -45,56 +49,39 @@ function PeriodSlider({ value, onChange }: { value: TimeTab; onChange: (t: TimeT
     onChange(TIME_TABS[idxFromClientX(e.clientX)])
   }
 
-  return (
-    <div className="px-6 pb-4 pt-2 select-none" dir="rtl">
-      {/* Labels */}
-      <div className="flex justify-between mb-3">
-        {TIME_TABS.map(tab => (
-          <button
-            key={tab}
-            onClick={() => onChange(tab)}
-            className={`text-sm transition-colors ${
-              tab === value ? 'text-primary font-bold' : 'text-on-surface-variant font-medium'
-            }`}
-          >
-            {tab}
-          </button>
-        ))}
-      </div>
+  // Pill left% in LTR CSS coords: index 0 (שבועי, rightmost) → leftmost CSS left ≈ 66%
+  const pillLeftPct = ((n - 1 - activeIdx) / (n - 1)) * (100 - 100 / n)
 
-      {/* Track */}
+  return (
+    <div className="px-4 py-3">
       <div
-        ref={trackRef}
-        className="relative h-[3px] bg-outline-variant rounded-full cursor-pointer"
+        ref={containerRef}
+        className="relative flex bg-surface-high rounded-lg p-1 cursor-pointer touch-none"
+        dir="rtl"
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
       >
-        {/* Fill: from right (שבועי) to thumb — grows as period widens */}
+        {/* Sliding pill */}
         <div
-          className="absolute right-0 top-0 h-full bg-primary rounded-full transition-[width] duration-150"
-          style={{ width: `${100 - leftPct}%` }}
+          className="absolute inset-y-1 rounded-md bg-primary-container"
+          style={{
+            width: `calc(${100 / n}% - 8px)`,
+            left: `calc(${pillLeftPct}% + 4px)`,
+            transition: 'left 150ms ease',
+          }}
         />
 
-        {/* Stop dots */}
-        {TIME_TABS.map((_, i) => {
-          const dotLeft = ((maxIdx - i) / maxIdx) * 100
-          return (
-            <div
-              key={i}
-              className={`absolute top-1/2 w-2 h-2 rounded-full transition-colors duration-150 ${
-                i <= activeIdx ? 'bg-outline-variant' : 'bg-primary'
-              }`}
-              style={{ left: `${dotLeft}%`, transform: 'translate(-50%, -50%)' }}
-            />
-          )
-        })}
-
-        {/* Thumb */}
-        <div
-          className="absolute top-1/2 w-5 h-5 rounded-full bg-primary shadow-md
-            cursor-grab active:cursor-grabbing transition-[left] duration-150"
-          style={{ left: `${leftPct}%`, transform: 'translate(-50%, -50%)' }}
-        />
+        {/* Labels — each 1/3 width, pointer events none so the container handles drags */}
+        {TIME_TABS.map(tab => (
+          <span
+            key={tab}
+            className={`relative flex-1 text-sm py-2.5 text-center font-bold z-10 pointer-events-none select-none transition-colors duration-150 ${
+              tab === value ? 'text-on-primary-container' : 'text-on-surface-variant'
+            }`}
+          >
+            {tab}
+          </span>
+        ))}
       </div>
     </div>
   )
@@ -106,13 +93,13 @@ export function TrendsScreen() {
   const { data, isLoading } = useDiaryData()
   const [activeTab, setActiveTab] = useState<TimeTab>('שבועי')
 
-  const cutoffDate = useMemo(() => {
+  // Compute cutoff as a dateKey string ("YYYY-MM-DD") — safer than Date comparison
+  const cutoffDateKey = useMemo(() => {
     const days = PERIOD_DAYS[activeTab]
     if (days === null) return null
     const d = new Date()
     d.setDate(d.getDate() - days)
-    d.setHours(0, 0, 0, 0)
-    return d
+    return toDateKey(d)
   }, [activeTab])
 
   const chartData = useMemo(() => {
@@ -122,7 +109,8 @@ export function TrendsScreen() {
 
     for (const entry of data.statuses) {
       if (!entry.dateKey) continue
-      if (cutoffDate && entry.date < cutoffDate) continue   // ← actual filtering
+      // Filter: skip entries older than the cutoff date
+      if (cutoffDateKey && entry.dateKey < cutoffDateKey) continue
 
       if (!totalByDate.has(entry.dateKey)) {
         totalByDate.set(entry.dateKey, { date: entry.date, total: 0, present: 0 })
@@ -140,7 +128,7 @@ export function TrendsScreen() {
         חוץ: total - present,
         _total: total,
       }))
-  }, [data, cutoffDate])
+  }, [data, cutoffDateKey])
 
   const { presentAvg, absentAvg, totalAvg } = useMemo(() => {
     if (chartData.length === 0) return { presentAvg: 0, absentAvg: 0, totalAvg: 0 }
@@ -156,7 +144,7 @@ export function TrendsScreen() {
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden" dir="rtl">
-      {/* Period slider */}
+      {/* Period selector */}
       <PeriodSlider value={activeTab} onChange={setActiveTab} />
 
       {isLoading && (
@@ -168,7 +156,9 @@ export function TrendsScreen() {
       {data && (
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-4">
           {chartData.length === 0 ? (
-            <div className="text-center text-on-surface-variant text-sm py-12">אין נתונים להצגה</div>
+            <div className="text-center text-on-surface-variant text-sm py-12">
+              אין נתונים ל{activeTab}
+            </div>
           ) : (
             <>
               <ResponsiveContainer width="100%" height={260}>
@@ -202,7 +192,6 @@ export function TrendsScreen() {
                 </LineChart>
               </ResponsiveContainer>
 
-              {/* Stats */}
               <div className="flex gap-3">
                 <div className="bg-primary-container rounded-lg p-4 flex-1 text-center">
                   <div className="text-4xl font-bold text-on-primary-container">{presentAvg}</div>

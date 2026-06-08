@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/contexts/AuthContext'
 import { listUserSheets, type SheetFile } from '@/data/sheetsClient'
+import { useSheetHistory } from '@/hooks/useSheetHistory'
 
 const SELECTED_SHEET_KEY = 'army-hr-sheet'
 
@@ -15,9 +16,14 @@ export function getSelectedSheet(): { id: string; name: string } | null {
   }
 }
 
+export function setSelectedSheet(sheet: { id: string; name: string }) {
+  localStorage.setItem(SELECTED_SHEET_KEY, JSON.stringify(sheet))
+}
+
 export function SheetPickerScreen() {
   const { token, isSignedIn } = useAuth()
   const navigate = useNavigate()
+  const { addSheet } = useSheetHistory()
 
   useEffect(() => {
     if (!isSignedIn) navigate('/signin', { replace: true })
@@ -31,7 +37,9 @@ export function SheetPickerScreen() {
   })
 
   function selectSheet(sheet: SheetFile) {
-    localStorage.setItem(SELECTED_SHEET_KEY, JSON.stringify({ id: sheet.id, name: sheet.name }))
+    const entry = { id: sheet.id, name: sheet.name }
+    localStorage.setItem(SELECTED_SHEET_KEY, JSON.stringify(entry))
+    addSheet(entry)
     navigate('/diary', { replace: true })
   }
 

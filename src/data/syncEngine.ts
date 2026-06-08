@@ -1,6 +1,9 @@
 import { markAttempted, removeWrite } from './writeQueue'
-import { updateCell, readCell } from './sheetsClient'
+import { updateCell } from './sheetsClient'
 import { db } from './db'
+import { getSnapshot } from './localCache'
+
+const MAX_ATTEMPTS = 5
 
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'offline'
 
@@ -82,23 +85,42 @@ export async function drainQueue(): Promise<void> {
   for (const [, writes] of bySheet) {
     for (const write of writes) {
       try {
-        // Conflict check: read remote value before writing
-        const remoteValue = await readCell(token, write.spreadsheetId, write.sheetName, write.row, write.col)
-        if (remoteValue !== write.oldValue && remoteValue !== write.newValue) {
-          // Conflict: remote value differs from what we expected
+        // Max-attempts guard: permanently fail writes that have exceeded the retry cap
+        if (write.attempts >= MAX_ATTEMPTS) {
           await db.conflicts.add({
             spreadsheetId: write.spreadsheetId,
             sheetName: write.sheetName,
             row: write.row,
             col: write.col,
             expectedOldValue: write.oldValue,
-            actualRemoteValue: remoteValue,
+            actualRemoteValue: '(write failed after max retries)',
             ourNewValue: write.newValue,
             detectedAt: Date.now(),
           })
-          // Skip this write to preserve remote value (don't silently overwrite)
           await removeWrite(write.id!)
           continue
+        }
+
+        // Snapshot-based conflict detection (avoids extra API round-trip)
+        const snap = await getSnapshot(write.spreadsheetId, write.sheetName)
+        if (snap) {
+          const remoteFromSnapshot = (snap.rawValues[write.row]?.[write.col] ?? '').trim()
+          const oldValueNorm = write.oldValue.trim()
+          const newValueNorm = write.newValue.trim()
+          if (remoteFromSnapshot !== oldValueNorm && remoteFromSnapshot !== newValueNorm) {
+            await db.conflicts.add({
+              spreadsheetId: write.spreadsheetId,
+              sheetName: write.sheetName,
+              row: write.row,
+              col: write.col,
+              expectedOldValue: write.oldValue,
+              actualRemoteValue: remoteFromSnapshot,
+              ourNewValue: write.newValue,
+              detectedAt: Date.now(),
+            })
+            await removeWrite(write.id!)
+            continue
+          }
         }
 
         await updateCell(token, {

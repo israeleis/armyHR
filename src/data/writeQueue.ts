@@ -15,9 +15,13 @@ export async function getPendingWrites(spreadsheetId: string): Promise<QueuedWri
 }
 
 export async function markAttempted(id: number): Promise<void> {
-  await db.writeQueue.update(id, {
-    attempts: ((await db.writeQueue.get(id))?.attempts ?? 0) + 1,
-    lastAttemptAt: Date.now(),
+  await db.transaction('rw', db.writeQueue, async () => {
+    const item = await db.writeQueue.get(id)
+    if (!item) return
+    await db.writeQueue.update(id, {
+      attempts: item.attempts + 1,
+      lastAttemptAt: Date.now(),
+    })
   })
 }
 

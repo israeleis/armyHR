@@ -1,6 +1,8 @@
 import { createBrowserRouter, Outlet, Navigate } from 'react-router-dom'
 import { BottomNav } from '@/components/BottomNav'
 import { OfflineBadge } from '@/components/OfflineBadge'
+import { SignInScreen } from '@/features/auth/SignInScreen'
+import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
 
 // Placeholder for screens implemented in later tasks
 function Placeholder({ name }: { name: string }) {
@@ -39,7 +41,8 @@ export const router = createBrowserRouter([
       { path: 'soldier/:id', element: <Placeholder name="הסטטוס שלי" /> },
       { path: 'trends', element: <Placeholder name="מגמות זמינות" /> },
       { path: 'import', element: <Placeholder name="ייבוא מקובץ" /> },
-      { path: 'sheets', element: <Placeholder name="בחירת גיליון" /> },
+      { path: 'sheets', element: <SheetPickerScreen /> },
+      { path: 'signin', element: <SignInScreen /> },
       { path: '*', element: <Navigate to="/diary" replace /> },
     ],
   },

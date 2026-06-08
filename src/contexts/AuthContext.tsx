@@ -5,7 +5,8 @@ export interface AuthState {
   userEmail: string | null
   isSignedIn: boolean
   signIn: () => void      // stub — implemented in Task E
-  signOut: () => void     // stub — implemented in Task E
+  signOut: () => void
+  setToken: (token: string) => void
 }
 
 const AuthContext = createContext<AuthState | null>(null)
@@ -18,7 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = () => { setToken(null); setUserEmail(null) }
 
   return (
-    <AuthContext.Provider value={{ token, userEmail, isSignedIn: !!token, signIn, signOut }}>
+    <AuthContext.Provider value={{ token, userEmail, isSignedIn: !!token, signIn, signOut, setToken }}>
       {children}
     </AuthContext.Provider>
   )

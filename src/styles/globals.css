@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+:root {
+  --color-surface: #131313;
+  --color-surface-container: #201f1f;
+  --color-on-surface: #e5e2e1;
+  --color-primary: #c3cc8c;
+  --color-primary-container: #4b5320;
+  --color-secondary-container: #ffbf00;
+  --color-outline: #919283;
+  --color-outline-variant: #47483c;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Public Sans", system-ui, sans-serif;
+  background-color: var(--color-surface);
+  color: var(--color-on-surface);
+  direction: rtl;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Minimum touch target for glove/vehicle use */
+button, [role="button"], a {
+  min-height: 44px;
+  min-width: 44px;
+}

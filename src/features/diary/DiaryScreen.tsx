@@ -1,54 +1,102 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { format, addDays, startOfToday, isToday } from 'date-fns'
 import { he } from 'date-fns/locale'
+import { PieChart, Pie, Cell } from 'recharts'
 import { useDiaryData } from './useDiaryData'
 import { StatusBadge } from '@/components/StatusBadge'
 import { useAuth } from '@/contexts/AuthContext'
-import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
 
 function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+const SUMMARY_GROUPS = [
+  { label: 'נוכח',      codes: ['נ'],                          color: '#66ff33' },
+  { label: 'בית',       codes: ['ב', 'חול'],                   color: '#f3cfc6' },
+  { label: 'חולים',     codes: ['ג', 'ת'],                     color: '#f5cac3' },
+  { label: 'בדרכים',   codes: ['י', 'ח', 'יח', 'חי', 'מ', 'פ', 'ל'], color: '#f4d35e' },
+]
+
 export function DiaryScreen() {
-  const { isSignedIn, signOut } = useAuth()
+  const { isSignedIn } = useAuth()
   const { data, isLoading, error } = useDiaryData()
   const navigate = useNavigate()
-  const sheet = getSelectedSheet()
   const [selectedUnit, setSelectedUnit] = useState<string>('הכל')
-
-  // Date range: 3 days back to 10 days forward
+  const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
+  const carouselRef = useRef<HTMLDivElement>(null)
   const today = startOfToday()
-  const dates = Array.from({ length: 14 }, (_, i) => addDays(today, i - 3))
 
-  // Unique units
+  const dates = useMemo(() => {
+    if (data && data.schema.dateColIndices.size > 0) {
+      return Array.from(data.schema.dateColIndices.values())
+        .sort((a, b) => a.getTime() - b.getTime())
+    }
+    return Array.from({ length: 14 }, (_, i) => addDays(today, i - 3))
+  }, [data, today])
+
+  const activeDate = useMemo(() => {
+    if (selectedDateKey) {
+      const found = dates.find(d => toDateKey(d) === selectedDateKey)
+      if (found) return found
+    }
+    return dates.find(d => isToday(d)) ?? dates[dates.length - 1] ?? today
+  }, [selectedDateKey, dates, today])
+
+  const activeDateKey = toDateKey(activeDate)
+
   const units = useMemo(() => {
     if (!data) return []
     return ['הכל', ...new Set(data.soldiers.map(s => s.unit).filter(Boolean) as string[])]
   }, [data])
 
-  // Filter soldiers by unit
   const filteredSoldiers = useMemo(() => {
     if (!data) return []
     if (selectedUnit === 'הכל') return data.soldiers
     return data.soldiers.filter(s => s.unit === selectedUnit)
   }, [data, selectedUnit])
 
-  // Status counts per date key
-  const countsByDate = useMemo(() => {
-    if (!data) return new Map<string, Record<string, number>>()
-    const map = new Map<string, Record<string, number>>()
-    const filteredIds = new Set(filteredSoldiers.map(s => s.id))
-    for (const entry of data.statuses) {
-      if (!filteredIds.has(entry.soldierId)) continue
-      if (!entry.code) continue
-      const counts = map.get(entry.dateKey) ?? {}
-      counts[entry.code] = (counts[entry.code] ?? 0) + 1
-      map.set(entry.dateKey, counts)
+  const filteredIds = useMemo(() => new Set(filteredSoldiers.map(s => s.id)), [filteredSoldiers])
+
+  const activeDateStatuses = useMemo(() => {
+    if (!data) return []
+    return data.statuses.filter(e => e.dateKey === activeDateKey && filteredIds.has(e.soldierId))
+  }, [data, activeDateKey, filteredIds])
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {}
+    for (const entry of activeDateStatuses) {
+      if (entry.code) counts[entry.code] = (counts[entry.code] ?? 0) + 1
     }
-    return map
-  }, [data, filteredSoldiers])
+    return counts
+  }, [activeDateStatuses])
+
+  const summaryGroups = useMemo(() =>
+    SUMMARY_GROUPS.map(g => ({
+      ...g,
+      count: g.codes.reduce((sum, code) => sum + (statusCounts[code] ?? 0), 0),
+    })),
+    [statusCounts]
+  )
+
+  const totalCount = summaryGroups.reduce((s, g) => s + g.count, 0)
+  const donutData = summaryGroups.filter(g => g.count > 0)
+
+  const previewSoldiers = useMemo(() =>
+    activeDateStatuses
+      .filter(e => e.code)
+      .slice(0, 6),
+    [activeDateStatuses]
+  )
+
+  // Scroll carousel to active date
+  useEffect(() => {
+    if (!carouselRef.current) return
+    const idx = dates.findIndex(d => toDateKey(d) === activeDateKey)
+    if (idx < 0) return
+    const el = carouselRef.current.children[idx] as HTMLElement | undefined
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }, [activeDateKey, dates])
 
   if (!isSignedIn) {
     return (
@@ -60,32 +108,8 @@ export function DiaryScreen() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen pb-16">
-      {/* Header */}
-      <header className="sticky top-0 z-10 bg-surface-container border-b border-outline-variant px-4 py-3 flex items-center justify-between">
-        <div>
-          <h1 className="text-headline-sm font-bold text-primary">יומן מצבת</h1>
-          {sheet && <p className="text-xs font-mono text-on-surface-variant truncate max-w-[200px]">{sheet.name}</p>}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigate('/sheets')}
-            className="text-xs text-on-surface-variant hover:text-primary px-2 py-1"
-            aria-label="שנה גיליון"
-          >
-            שנה גיליון
-          </button>
-          <button
-            onClick={signOut}
-            className="text-xs text-error hover:opacity-80 px-2 py-1"
-            aria-label="יציאה"
-          >
-            יציאה
-          </button>
-        </div>
-      </header>
-
-      {/* Unit filter */}
+    <div dir="rtl" className="flex flex-col flex-1 overflow-hidden bg-background">
+      {/* Unit filter tabs */}
       {units.length > 1 && (
         <div className="flex gap-2 overflow-x-auto px-4 py-2 border-b border-outline-variant no-scrollbar">
           {units.map(unit => (
@@ -103,7 +127,6 @@ export function DiaryScreen() {
         </div>
       )}
 
-      {/* Loading / error states */}
       {isLoading && (
         <div className="flex-1 flex items-center justify-center text-on-surface-variant font-mono text-sm">
           טוען נתוני מצבת...
@@ -116,65 +139,200 @@ export function DiaryScreen() {
         </div>
       )}
 
-      {/* Date timeline */}
       {data && (
         <div className="flex-1 overflow-y-auto">
-          <div className="space-y-1 p-2">
-            {dates.map(date => {
-              const dk = toDateKey(date)
-              const counts = countsByDate.get(dk) ?? {}
-              const todayStyle = isToday(date)
 
-              return (
-                <button
-                  key={dk}
-                  onClick={() => navigate(`/diary/${dk}`)}
-                  className={`w-full text-right flex items-center gap-3 px-4 py-3 rounded-md transition-colors
-                    ${todayStyle
-                      ? 'bg-primary-container/40 border border-primary/60'
-                      : 'bg-surface-high hover:bg-surface-bright'}`}
-                >
-                  {/* Date */}
-                  <div className="shrink-0 text-center min-w-[56px]">
-                    <div className={`text-label-caps font-mono ${todayStyle ? 'text-primary' : 'text-on-surface-variant'}`}>
+          {/* ─── Date carousel ─── */}
+          <div className="px-4 pt-4 pb-2">
+            {/* Section header: label RIGHT (start in RTL), year LEFT (end in RTL) */}
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">ציר זמן תאריכים</span>
+              <span className="text-xs font-mono text-on-surface-variant">
+                {format(activeDate, 'yyyy', { locale: he })}
+              </span>
+            </div>
+            {/* RTL carousel: scroll direction matches RTL reading order */}
+            <div
+              ref={carouselRef}
+              className="flex flex-row-reverse gap-2 overflow-x-auto no-scrollbar pb-1"
+              style={{ direction: 'rtl' }}
+            >
+              {dates.map(date => {
+                const dk = toDateKey(date)
+                const active = dk === activeDateKey
+                const today_ = isToday(date)
+                return (
+                  <button
+                    key={dk}
+                    onClick={() => setSelectedDateKey(dk)}
+                    className={`shrink-0 flex flex-col items-center justify-center rounded-md transition-all
+                      ${active
+                        ? 'w-[80px] h-[80px] bg-primary-container border border-primary/60'
+                        : today_
+                          ? 'w-[60px] h-[68px] bg-surface-high border border-primary/40'
+                          : 'w-[60px] h-[68px] bg-surface-high border border-transparent'}`}
+                  >
+                    <span className={`text-[10px] font-mono uppercase mb-0.5 ${active ? 'text-on-primary-container' : 'text-on-surface-variant'}`}>
                       {format(date, 'EEE', { locale: he })}
-                    </div>
-                    <div className={`text-lg font-bold leading-none ${todayStyle ? 'text-primary' : 'text-on-surface'}`}>
-                      {format(date, 'd/M')}
-                    </div>
-                    {todayStyle && <div className="text-[10px] text-primary font-bold mt-0.5">היום</div>}
-                  </div>
-
-                  {/* Status summary */}
-                  <div className="flex-1 flex flex-wrap gap-1 justify-end">
-                    {Object.keys(counts).length === 0 ? (
-                      <span className="text-xs text-on-surface-variant">אין נתונים</span>
-                    ) : (
-                      Object.entries(counts)
-                        .sort(([a], [b]) => b.localeCompare(a))
-                        .slice(0, 5)
-                        .map(([code, count]) => (
-                          <div key={code} className="flex items-center gap-1">
-                            <StatusBadge code={code} size="sm" />
-                            <span className="text-xs font-mono text-on-surface-variant">{count}</span>
-                          </div>
-                        ))
+                    </span>
+                    <span className={`font-bold leading-none ${active ? 'text-xl text-on-primary-container' : 'text-sm text-on-surface'}`}>
+                      {format(date, 'd.MM')}
+                    </span>
+                    {today_ && (
+                      <span className={`text-[8px] font-bold mt-0.5 ${active ? 'text-on-primary-container' : 'text-primary'}`}>
+                        היום
+                      </span>
                     )}
-                  </div>
-
-                  <span className="text-outline shrink-0 text-lg">›</span>
-                </button>
-              )
-            })}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          {/* Recent changes placeholder */}
-          <div className="mx-4 mb-4 mt-2 p-4 bg-surface-high rounded-md border border-outline-variant">
-            <h2 className="text-sm font-bold text-on-surface-variant mb-2">שינויים אחרונים</h2>
+          {/* ─── Daily summary card ─── */}
+          <div className="mx-4 mb-4 bg-surface-container border border-outline-variant rounded-lg overflow-hidden">
+            {/* Header: "סיכום יומי" RIGHT, date LEFT (RTL) */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant">
+              <span className="text-xs font-mono text-on-surface-variant">
+                {format(activeDate, 'd.MM', { locale: he })}
+              </span>
+              <span className="text-sm font-bold text-on-surface">סיכום יומי</span>
+            </div>
+
+            {totalCount > 0 ? (
+              <div className="p-4">
+                {/* Content: donut LEFT, stats grid RIGHT — in RTL flex-row donut is on the left visually */}
+                <div className="flex flex-row items-center gap-4">
+                  {/* Donut chart — LEFT side */}
+                  <div className="relative shrink-0 w-[110px] h-[110px]">
+                    <PieChart width={110} height={110}>
+                      <Pie
+                        data={donutData}
+                        cx={50}
+                        cy={50}
+                        innerRadius={32}
+                        outerRadius={50}
+                        dataKey="count"
+                        strokeWidth={1}
+                        stroke="#131313"
+                        startAngle={90}
+                        endAngle={-270}
+                      >
+                        {donutData.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                    {/* Center label */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-lg font-bold text-on-surface leading-none">{totalCount}</span>
+                      <span className="text-[9px] text-on-surface-variant font-mono">כוח</span>
+                    </div>
+                  </div>
+
+                  {/* Stats 2×2 grid — RIGHT side (flex-1) */}
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    {summaryGroups.map(g => (
+                      <div key={g.label} className="bg-surface-high rounded-md px-3 py-2 text-right">
+                        <div
+                          className="text-2xl font-bold leading-none mb-0.5"
+                          style={{ color: g.count > 0 ? g.color : '#47483c' }}
+                        >
+                          {g.count}
+                        </div>
+                        <div className="text-[10px] font-mono text-on-surface-variant">{g.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => navigate(`/diary/${activeDateKey}`)}
+                  className="mt-3 w-full text-center text-xs font-bold text-primary py-2 border border-outline-variant rounded-md hover:bg-surface-high transition-colors"
+                >
+                  פירוט מלא ←
+                </button>
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-center">
+                <p className="text-sm text-on-surface-variant">אין נתונים לתאריך זה</p>
+                <button
+                  onClick={() => navigate(`/diary/${activeDateKey}`)}
+                  className="mt-2 text-xs text-primary underline"
+                >
+                  פתח פירוט
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* ─── Personnel preview ─── */}
+          {previewSoldiers.length > 0 && (
+            <div className="mx-4 mb-4">
+              {/* Section header: "מצב כוח אדם" RIGHT, "הכל (N) ←" LEFT (RTL layout) */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-primary font-bold">
+                  {activeDateStatuses.filter(e => e.code).length > 6 && (
+                    <button
+                      onClick={() => navigate(`/diary/${activeDateKey}`)}
+                    >
+                      הכל ({activeDateStatuses.filter(e => e.code).length}) ←
+                    </button>
+                  )}
+                </span>
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">מצב כוח אדם</span>
+              </div>
+              <div className="space-y-1">
+                {previewSoldiers.map(entry => {
+                  const soldier = data.soldiers.find(s => s.id === entry.soldierId)
+                  if (!soldier) return null
+                  const initials = soldier.name.trim().split(' ').map(w => w[0]).join('').slice(0, 2)
+                  return (
+                    <button
+                      key={entry.soldierId}
+                      onClick={() => navigate(`/soldier/${encodeURIComponent(soldier.id)}`)}
+                      className="w-full flex flex-row-reverse items-center gap-3 bg-surface-high border border-outline-variant rounded-md px-3 py-2.5 hover:bg-surface-bright transition-colors"
+                    >
+                      {/* Avatar — rightmost in RTL (flex-row-reverse) */}
+                      <div className="shrink-0 w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-xs font-bold text-on-primary-container">
+                        {initials}
+                      </div>
+                      {/* Name / rank — center */}
+                      <div className="flex-1 text-right min-w-0">
+                        <div className="text-sm font-bold text-on-surface truncate">{soldier.name}</div>
+                        {(soldier.rank || soldier.unit) && (
+                          <div className="text-[10px] font-mono text-on-surface-variant">
+                            {[soldier.rank, soldier.unit].filter(Boolean).join(' · ')}
+                          </div>
+                        )}
+                      </div>
+                      {/* Badge + chevron — leftmost in RTL */}
+                      <StatusBadge code={entry.code} size="sm" />
+                      <span className="text-outline text-sm">›</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ─── Recent changes placeholder ─── */}
+          <div className="mx-4 mb-4 p-4 bg-surface-high rounded-md border border-outline-variant text-right">
+            <h2 className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2">שינויים אחרונים</h2>
             <p className="text-xs text-outline font-mono">אין שינויים אחרונים</p>
           </div>
+
         </div>
       )}
+
+      {/* FAB — fixed above bottom nav */}
+      <button
+        onClick={() => navigate(`/diary/${activeDateKey}`)}
+        className="fixed bottom-20 left-4 w-14 h-14 rounded-full bg-primary-container text-on-primary-container text-2xl font-bold shadow-lg flex items-center justify-center z-20 hover:opacity-90 transition-opacity"
+        aria-label="פתח יומן"
+      >
+        +
+      </button>
     </div>
   )
 }

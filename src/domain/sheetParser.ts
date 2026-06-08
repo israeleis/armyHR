@@ -22,7 +22,7 @@ const SOLDIER_ALIASES: Record<string, string> = {
 /** Strip Hebrew nikud (vowel diacritics) and normalise to lowercase, no spaces, no punctuation */
 function normaliseHeader(h: string): string {
   return h
-    .replace(/[֑-ׇ]/g, '') // nikud
+    .replace(/[֑-ׇ]/g, '') // Hebrew nikud + cantillation marks (U+0591–U+05C7)
     .replace(/['"״׳]/g, '')          // Hebrew geresh/gershayim
     .replace(/\s+/g, '')
     .toLowerCase()
@@ -69,7 +69,7 @@ export function parseSheet(rawValues: string[][]): ParseResult {
   }
 
   const headerRow = rawValues[headerRowIdx]
-  const schema = buildSchema(headerRow, headerRowIdx)
+  const schema = buildSchema(headerRow, headerRowIdx, warnings)
   if (schema.soldierColIndices.size === 0 && schema.dateColIndices.size === 0) {
     warnings.push('Could not detect any soldier or date columns from headers')
   }
@@ -79,7 +79,7 @@ export function parseSheet(rawValues: string[][]): ParseResult {
     const row = rawValues[r]
     if (!row || row.every(c => !c.trim())) continue // skip blank rows
 
-    const soldierFields = extractSoldierFields(row, schema, r)
+    const soldierFields = extractSoldierFields(row, schema, r, warnings)
     soldiers.push(soldierFields)
 
     // Status entries (wide → long)
@@ -96,11 +96,15 @@ export function parseSheet(rawValues: string[][]): ParseResult {
     }
   }
 
+  if (soldiers.length === 0) {
+    warnings.push('Header row found but no data rows were parsed (all rows may be blank)')
+  }
+
   return { soldiers, statuses, schema, warnings }
 }
 
-function buildSchema(headerRow: string[], headerRowIdx: number): SheetSchema {
-  const soldierColIndices = new Map<any, number>()
+function buildSchema(headerRow: string[], headerRowIdx: number, warnings: string[]): SheetSchema {
+  const soldierColIndices = new Map<keyof Omit<SoldierFields, 'extra' | 'sourceRow'>, number>()
   const extraColIndices = new Map<string, number>()
   const dateColIndices = new Map<number, Date>()
 
@@ -110,8 +114,8 @@ function buildSchema(headerRow: string[], headerRowIdx: number): SheetSchema {
 
     const canonicalField = SOLDIER_ALIASES[normalised]
     if (canonicalField) {
-      if (!soldierColIndices.has(canonicalField)) {
-        soldierColIndices.set(canonicalField, c)
+      if (!soldierColIndices.has(canonicalField as keyof Omit<SoldierFields, 'extra' | 'sourceRow'>)) {
+        soldierColIndices.set(canonicalField as keyof Omit<SoldierFields, 'extra' | 'sourceRow'>, c)
       }
       continue
     }
@@ -119,6 +123,12 @@ function buildSchema(headerRow: string[], headerRowIdx: number): SheetSchema {
     const date = tryParseDate(raw)
     if (date) {
       dateColIndices.set(c, date)
+      // Warn when date header has no 4-digit year (year ambiguity)
+      if (/^\d{1,2}\/\d{1,2}$/.test(raw.trim())) {
+        warnings.push(
+          `Date column "${raw}" has no year — assuming ${date.getFullYear()}. Dates near year boundaries may be incorrect.`
+        )
+      }
       continue
     }
 
@@ -130,9 +140,14 @@ function buildSchema(headerRow: string[], headerRowIdx: number): SheetSchema {
   return { soldierColIndices, extraColIndices, dateColIndices, headerRow: headerRowIdx }
 }
 
-function extractSoldierFields(row: string[], schema: SheetSchema, sourceRow: number): SoldierFields {
-  const get = (field: string) => {
-    const col = schema.soldierColIndices.get(field as any)
+function extractSoldierFields(
+  row: string[],
+  schema: SheetSchema,
+  sourceRow: number,
+  warnings?: string[],
+): SoldierFields {
+  const get = (field: keyof Omit<SoldierFields, 'extra' | 'sourceRow'>) => {
+    const col = schema.soldierColIndices.get(field)
     return col !== undefined ? (row[col] ?? '').trim() : ''
   }
 
@@ -144,6 +159,10 @@ function extractSoldierFields(row: string[], schema: SheetSchema, sourceRow: num
 
   const name = get('name')
   const id = get('id')
+
+  if (!id && name) {
+    warnings?.push(`Row ${sourceRow}: no ID found for soldier "${name}" — using name as ID`)
+  }
 
   return {
     id: id || name, // fallback to name if no id column

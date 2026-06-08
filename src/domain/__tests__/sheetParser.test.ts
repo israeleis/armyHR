@@ -99,4 +99,22 @@ describe('parseSheet', () => {
     const r = parseSheet(raw)
     expect(r.schema.extraColIndices.size).toBe(0)
   })
+
+  it('emits a warning for DD/MM-only date columns (year ambiguity)', () => {
+    const raw = [['שם', '15/06'], ['אבי', 'נ']]
+    const r = parseSheet(raw)
+    expect(r.warnings.some(w => w.includes('no year') || w.includes('year'))).toBe(true)
+  })
+
+  it('emits a warning when no data rows found', () => {
+    const raw = [['שם', '01/06/2024']]
+    const r = parseSheet(raw)
+    expect(r.warnings.some(w => w.includes('no data') || w.includes('blank') || w.includes('parsed'))).toBe(true)
+  })
+
+  it('emits a warning for soldier with no id column', () => {
+    const raw = [['שם', '01/06'], ['יוסי', 'נ']]
+    const r = parseSheet(raw)
+    expect(r.warnings.some(w => w.includes('no ID') || w.includes('name as ID'))).toBe(true)
+  })
 })

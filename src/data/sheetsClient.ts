@@ -105,3 +105,85 @@ export async function readCell(
   const data = await res.json()
   return ((data.values ?? [['']])[0]?.[0] ?? '') as string
 }
+
+// ── Sheet Picker: folder browse + search + paste ──────────────────────────
+
+export interface FolderItem { id: string; name: string }
+
+export interface FolderContents {
+  folders: FolderItem[]
+  sheets: SheetFile[]
+  nextPageToken?: string
+}
+
+export interface SearchResults {
+  sheets: SheetFile[]
+}
+
+/** Extract spreadsheet ID from a Google Sheets URL. Returns null if not a Sheets URL. */
+export function extractSpreadsheetId(url: string): string | null {
+  const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)
+  return m?.[1] ?? null
+}
+
+/** List folders and sheets inside a Drive folder (use 'root' for My Drive). */
+export async function listFolderContents(
+  token: string,
+  folderId: string,
+  pageToken?: string,
+): Promise<FolderContents> {
+  const q = `'${folderId}' in parents AND (mimeType='application/vnd.google-apps.folder' OR mimeType='application/vnd.google-apps.spreadsheet') AND trashed=false`
+  const params = new URLSearchParams({
+    q,
+    fields: 'nextPageToken,files(id,name,mimeType)',
+    orderBy: 'folder,name',
+    pageSize: '50',
+  })
+  if (pageToken) params.set('pageToken', pageToken)
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`Drive API ${res.status}: ${await res.text()}`)
+  const data = await res.json()
+  const files: Array<{ id: string; name: string; mimeType: string }> = data.files ?? []
+  const FOLDER_TYPE = 'application/vnd.google-apps.folder'
+  return {
+    folders: files.filter(f => f.mimeType === FOLDER_TYPE).map(f => ({ id: f.id, name: f.name })),
+    sheets: files.filter(f => f.mimeType !== FOLDER_TYPE).map(f => ({ id: f.id, name: f.name })),
+    nextPageToken: data.nextPageToken,
+  }
+}
+
+/** Search Google Drive for spreadsheets by name. */
+export async function searchSheets(
+  token: string,
+  query: string,
+  pageToken?: string,
+): Promise<SearchResults> {
+  const safe = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  const q = `name contains '${safe}' AND mimeType='application/vnd.google-apps.spreadsheet' AND trashed=false`
+  const params = new URLSearchParams({
+    q,
+    fields: 'files(id,name)',
+    orderBy: 'modifiedTime desc',
+    pageSize: '30',
+  })
+  if (pageToken) params.set('pageToken', pageToken)
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?${params}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`Drive API ${res.status}: ${await res.text()}`)
+  const data = await res.json()
+  return { sheets: (data.files ?? []) as SheetFile[] }
+}
+
+/** Fetch the display title of a spreadsheet by its ID. */
+export async function getSpreadsheetTitle(token: string, spreadsheetId: string): Promise<string> {
+  const res = await fetch(
+    `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=properties.title`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  )
+  if (!res.ok) throw new Error(`Sheets API ${res.status}: ${await res.text()}`)
+  const data = await res.json()
+  return data.properties.title as string
+}

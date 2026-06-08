@@ -5,7 +5,10 @@ import { useAuth } from '@/contexts/AuthContext'
 import {
   listUserSheets,
   searchSheets,
+  listFolderContents,
   type SheetFile,
+  type FolderItem,
+  type FolderContents,
 } from '@/data/sheetsClient'
 import { useSheetHistory } from '@/hooks/useSheetHistory'
 
@@ -51,7 +54,64 @@ export function SheetPickerScreen() {
   const [mode, setMode] = useState<Mode>('recent')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
-  const [, setFolderStack] = useState<Array<{ id: string; name: string }>>([])
+  const [folderStack, setFolderStack] = useState<FolderItem[]>([])
+
+  // Browse: pagination extras (first page from React Query; extras accumulate on "load more")
+  const [extraFolders, setExtraFolders] = useState<FolderItem[]>([])
+  const [extraSheets, setExtraSheets] = useState<SheetFile[]>([])
+  const [loadMoreToken, setLoadMoreToken] = useState<string | undefined>()
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  const currentFolderId = folderStack.at(-1)?.id ?? 'root'
+
+  const {
+    data: folderData,
+    isLoading: folderLoading,
+    error: folderError,
+    refetch: retryFolder,
+  } = useQuery<FolderContents>({
+    queryKey: ['folder', token, currentFolderId],
+    queryFn: () => listFolderContents(token!, currentFolderId),
+    enabled: mode === 'browse' && !!token,
+    staleTime: 1000 * 60 * 2,
+  })
+
+  // Reset pagination extras whenever the first page changes (new folder entered)
+  useEffect(() => {
+    setExtraFolders([])
+    setExtraSheets([])
+    setLoadMoreToken(folderData?.nextPageToken)
+  }, [folderData])
+
+  const displayFolders = [...(folderData?.folders ?? []), ...extraFolders]
+  const displaySheets = [...(folderData?.sheets ?? []), ...extraSheets]
+
+  async function handleLoadMore() {
+    if (!loadMoreToken || !token) return
+    setLoadingMore(true)
+    try {
+      const more = await listFolderContents(token, currentFolderId, loadMoreToken)
+      setExtraFolders(prev => [...prev, ...more.folders])
+      setExtraSheets(prev => [...prev, ...more.sheets])
+      setLoadMoreToken(more.nextPageToken)
+    } catch {
+      // non-critical; user can press "load more" again
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  function enterFolder(folder: FolderItem) {
+    setFolderStack(prev => [...prev, folder])
+  }
+
+  function browseBack() {
+    if (folderStack.length === 0) {
+      setMode('recent')
+      return
+    }
+    setFolderStack(prev => prev.slice(0, -1))
+  }
 
   useEffect(() => {
     if (!isSignedIn) navigate('/signin', { replace: true })
@@ -196,11 +256,87 @@ export function SheetPickerScreen() {
           </>
         )}
 
-        {/* ── BROWSE MODE placeholder ── (implemented in Task 3) */}
+        {/* ── BROWSE MODE ── */}
         {mode === 'browse' && (
-          <div className="text-center text-on-surface-variant py-12 text-sm">
-            מצב עיון — יושם בשלב הבא
-          </div>
+          <>
+            {/* Breadcrumb */}
+            <div className="sticky top-0 z-10 -mx-4 px-4 py-2 bg-surface-container border-b border-outline-variant flex items-center gap-1 text-sm flex-wrap">
+              <button
+                onClick={browseBack}
+                className="text-primary font-bold pl-2"
+                aria-label="חזור"
+              >
+                ←
+              </button>
+              <button
+                onClick={() => setFolderStack([])}
+                className={`text-on-surface-variant hover:text-on-surface ${folderStack.length === 0 ? 'text-on-surface font-bold' : ''}`}
+              >
+                My Drive
+              </button>
+              {folderStack.map((folder, i) => (
+                <span key={folder.id} className="flex items-center gap-1">
+                  <span className="text-outline">›</span>
+                  <button
+                    onClick={() => setFolderStack(folderStack.slice(0, i + 1))}
+                    className={`truncate max-w-[120px] hover:text-on-surface ${i === folderStack.length - 1 ? 'text-on-surface font-bold' : 'text-on-surface-variant'}`}
+                  >
+                    {folder.name}
+                  </button>
+                </span>
+              ))}
+            </div>
+
+            {/* Loading state */}
+            {folderLoading && (
+              <div className="text-center text-on-surface-variant py-8 font-mono text-sm">טוען...</div>
+            )}
+
+            {/* Error state */}
+            {folderError && (
+              <div className="bg-error-container/30 border border-error/50 rounded-md p-3 text-error text-sm text-right flex items-center justify-between">
+                <span>שגיאה בטעינת תיקייה</span>
+                <button onClick={() => retryFolder()} className="text-xs underline">נסה שוב</button>
+              </div>
+            )}
+
+            {/* Empty state */}
+            {!folderLoading && !folderError && displayFolders.length === 0 && displaySheets.length === 0 && (
+              <div className="text-center text-on-surface-variant py-12 text-sm">תיקייה ריקה</div>
+            )}
+
+            {/* Folders */}
+            {displayFolders.map(folder => (
+              <button
+                key={folder.id}
+                onClick={() => enterFolder(folder)}
+                className="w-full text-right bg-surface-high border border-outline-variant rounded-md px-4 py-3
+                  hover:border-primary hover:bg-primary-container/20 transition-colors flex items-center gap-3"
+              >
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current text-on-surface-variant shrink-0" aria-hidden="true">
+                  <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                </svg>
+                <span className="flex-1 font-medium text-on-surface truncate">{folder.name}</span>
+                <span className="text-on-surface-variant text-sm">›</span>
+              </button>
+            ))}
+
+            {/* Sheets */}
+            {displaySheets.map(sheet => (
+              <SheetRow key={sheet.id} sheet={sheet} onSelect={selectSheet} />
+            ))}
+
+            {/* Load more */}
+            {loadMoreToken && (
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="w-full py-3 text-sm text-primary font-bold text-center border border-outline-variant rounded-md hover:bg-surface-high transition-colors disabled:opacity-50"
+              >
+                {loadingMore ? 'טוען...' : 'טען עוד'}
+              </button>
+            )}
+          </>
         )}
 
         {/* ── PASTE MODE placeholder ── (implemented in Task 4) */}

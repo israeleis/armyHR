@@ -41,13 +41,31 @@ function tryParseDate(value: string): Date | null {
     return isValid(d) ? d : null
   }
 
-  // Try common formats
-  const formats = ['dd/MM/yyyy', 'dd/MM/yy', 'dd/MM', 'd/M/yyyy', 'd/M/yy', 'd/M']
-  const ref = new Date() // reference date for missing year
-  for (const fmt of formats) {
-    const d = parse(v, fmt, ref)
-    if (isValid(d)) return d
+  // 1. Try native Date constructor — only for unambiguous strings that contain a
+  //    4-digit year (ISO, RFC, full locale strings).  Strings like "12/3" are
+  //    skipped here because the browser treats them as MM/DD (US format) which
+  //    would flip day and month for Israeli dd/MM headers.
+  if (/\d{4}/.test(v)) {
+    const native = new Date(v)
+    if (!isNaN(native.getTime())) return native
   }
+
+  // 2. Extract a dd/MM(/yy|/yyyy)? pattern from anywhere in the string
+  //    (header cells often contain extra text like "יום א' 12/03" or "12/03/24 מרץ")
+  const dateMatch = v.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/)
+  if (dateMatch) {
+    const [, dd, mm, yy] = dateMatch
+    const ref = new Date()
+    const currentYear = ref.getFullYear()
+    const year = yy
+      ? (yy.length === 2 ? 2000 + parseInt(yy, 10) : parseInt(yy, 10))
+      : currentYear
+    const day = parseInt(dd, 10)
+    const month = parseInt(mm, 10) - 1  // Date months are 0-indexed
+    const d = new Date(year, month, day)
+    if (isValid(d) && d.getDate() === day && d.getMonth() === month) return d
+  }
+
   return null
 }
 
@@ -74,10 +92,12 @@ export function parseSheet(rawValues: string[][]): ParseResult {
     warnings.push('Could not detect any soldier or date columns from headers')
   }
 
-  // Data rows
+  // Data rows — stop when the first column is empty
   for (let r = headerRowIdx + 1; r < rawValues.length; r++) {
     const row = rawValues[r]
-    if (!row || row.every(c => !c.trim())) continue // skip blank rows
+    if (!row || !(row[0] ?? '').trim()) break
+
+
 
     const soldierFields = extractSoldierFields(row, schema, r, warnings)
     soldiers.push(soldierFields)
@@ -124,7 +144,7 @@ function buildSchema(headerRow: string[], headerRowIdx: number, warnings: string
     if (date) {
       dateColIndices.set(c, date)
       // Warn when date header has no 4-digit year (year ambiguity)
-      if (/^\d{1,2}\/\d{1,2}$/.test(raw.trim())) {
+      if (/^\d{1,2}[\/]\d{1,2}$/.test(raw.trim())) {
         warnings.push(
           `Date column "${raw}" has no year — assuming ${date.getFullYear()}. Dates near year boundaries may be incorrect.`
         )

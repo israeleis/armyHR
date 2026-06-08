@@ -1,4 +1,7 @@
+import { useState } from 'react'
 import { createHashRouter, Outlet, Navigate } from 'react-router-dom'
+import { AppHeader } from '@/components/AppHeader'
+import { Sidebar } from '@/components/Sidebar'
 import { BottomNav } from '@/components/BottomNav'
 import { OfflineBadge } from '@/components/OfflineBadge'
 import { SignInScreen } from '@/features/auth/SignInScreen'
@@ -10,10 +13,19 @@ import { TrendsScreen } from '@/features/trends/TrendsScreen'
 import { ImportScreen } from '@/features/import/ImportScreen'
 
 function AppLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
   return (
-    <div className="flex flex-col min-h-screen bg-background pb-16">
+    <div className="flex flex-col min-h-screen bg-background">
+      <AppHeader
+        sidebarOpen={sidebarOpen}
+        onToggleSidebar={() => setSidebarOpen(o => !o)}
+      />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <OfflineBadge />
-      <Outlet />
+      <div className="flex-1 flex flex-col pb-16">
+        <Outlet />
+      </div>
       <BottomNav />
     </div>
   )

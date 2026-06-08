@@ -93,12 +93,13 @@ export function SheetPickerScreen() {
 
   async function handleLoadMore() {
     if (!loadMoreToken || !token) return
+    const folderIdAtStart = currentFolderId
     setLoadingMore(true)
     try {
-      const more = await listFolderContents(token, currentFolderId, loadMoreToken)
-      setExtraFolders(prev => [...prev, ...more.folders])
-      setExtraSheets(prev => [...prev, ...more.sheets])
-      setLoadMoreToken(more.nextPageToken)
+      const more = await listFolderContents(token, folderIdAtStart, loadMoreToken)
+      setExtraFolders(prev => folderIdAtStart !== currentFolderId ? prev : [...prev, ...more.folders])
+      setExtraSheets(prev => folderIdAtStart !== currentFolderId ? prev : [...prev, ...more.sheets])
+      if (folderIdAtStart === currentFolderId) setLoadMoreToken(more.nextPageToken)
     } catch {
       // non-critical; user can press "load more" again
     } finally {
@@ -296,7 +297,7 @@ export function SheetPickerScreen() {
                 onClick={() => setFolderStack([])}
                 className={`text-on-surface-variant hover:text-on-surface ${folderStack.length === 0 ? 'text-on-surface font-bold' : ''}`}
               >
-                My Drive
+                הדרייב שלי
               </button>
               {folderStack.map((folder, i) => (
                 <span key={folder.id} className="flex items-center gap-1">

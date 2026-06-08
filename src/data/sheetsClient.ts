@@ -132,7 +132,8 @@ export async function listFolderContents(
   folderId: string,
   pageToken?: string,
 ): Promise<FolderContents> {
-  const q = `'${folderId}' in parents AND (mimeType='application/vnd.google-apps.folder' OR mimeType='application/vnd.google-apps.spreadsheet') AND trashed=false`
+  const safeFolderId = folderId.replace(/'/g, '')
+  const q = `'${safeFolderId}' in parents AND (mimeType='application/vnd.google-apps.folder' OR mimeType='application/vnd.google-apps.spreadsheet') AND trashed=false`
   const params = new URLSearchParams({
     q,
     fields: 'nextPageToken,files(id,name,mimeType)',
@@ -185,5 +186,7 @@ export async function getSpreadsheetTitle(token: string, spreadsheetId: string):
   )
   if (!res.ok) throw new Error(`Sheets API ${res.status}: ${await res.text()}`)
   const data = await res.json()
-  return data.properties.title as string
+  const title: string | undefined = data?.properties?.title
+  if (!title) throw new Error(`Sheets API returned no title for ${spreadsheetId}`)
+  return title
 }

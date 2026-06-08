@@ -1,4 +1,4 @@
-import { createBrowserRouter, Outlet, Navigate } from 'react-router-dom'
+import { createHashRouter, Outlet, Navigate } from 'react-router-dom'
 import { BottomNav } from '@/components/BottomNav'
 import { OfflineBadge } from '@/components/OfflineBadge'
 import { SignInScreen } from '@/features/auth/SignInScreen'
@@ -19,7 +19,7 @@ function AppLayout() {
   )
 }
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: '/',
     element: <Navigate to="/diary" replace />,

@@ -4,7 +4,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
+// When deploying to GitHub Pages the app lives at /<repo-name>/.
+// VITE_BASE_PATH is injected by the GitHub Actions workflow; local dev leaves it unset (defaults to '/').
+const base = process.env.VITE_BASE_PATH ?? '/'
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     tailwindcss(),
@@ -20,7 +25,7 @@ export default defineConfig({
         display: 'standalone',
         dir: 'rtl',
         lang: 'he',
-        start_url: '/',
+        start_url: base,
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },

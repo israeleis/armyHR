@@ -6,6 +6,8 @@ import {
   listUserSheets,
   searchSheets,
   listFolderContents,
+  getSpreadsheetTitle,
+  extractSpreadsheetId,
   type SheetFile,
   type FolderItem,
   type FolderContents,
@@ -61,6 +63,9 @@ export function SheetPickerScreen() {
   const [extraSheets, setExtraSheets] = useState<SheetFile[]>([])
   const [loadMoreToken, setLoadMoreToken] = useState<string | undefined>()
   const [loadingMore, setLoadingMore] = useState(false)
+  const [pasteValue, setPasteValue] = useState('')
+  const [pasteError, setPasteError] = useState<string | null>(null)
+  const [pasteLoading, setPasteLoading] = useState(false)
 
   const currentFolderId = folderStack.at(-1)?.id ?? 'root'
 
@@ -111,6 +116,25 @@ export function SheetPickerScreen() {
       return
     }
     setFolderStack(prev => prev.slice(0, -1))
+  }
+
+  async function handlePasteConfirm() {
+    const id = extractSpreadsheetId(pasteValue.trim())
+    if (!id) {
+      setPasteError('קישור לא תקין — יש להדביק קישור לגיליון Google Sheets')
+      return
+    }
+    if (!token) return
+    setPasteError(null)
+    setPasteLoading(true)
+    try {
+      const title = await getSpreadsheetTitle(token, id)
+      selectSheet({ id, name: title })
+    } catch {
+      setPasteError('לא ניתן לגשת לגיליון — בדוק שיש לך הרשאות גישה')
+    } finally {
+      setPasteLoading(false)
+    }
   }
 
   useEffect(() => {
@@ -339,10 +363,38 @@ export function SheetPickerScreen() {
           </>
         )}
 
-        {/* ── PASTE MODE placeholder ── (implemented in Task 4) */}
+        {/* ── PASTE MODE ── */}
         {mode === 'paste' && (
-          <div className="text-center text-on-surface-variant py-12 text-sm">
-            מצב הדבקת קישור — יושם בשלב הבא
+          <div className="bg-surface-high border border-outline-variant rounded-lg p-4 space-y-3">
+            <p className="text-sm font-bold text-on-surface text-right">הדבק קישור Google Sheets</p>
+            <input
+              type="url"
+              value={pasteValue}
+              onChange={e => { setPasteValue(e.target.value); setPasteError(null) }}
+              placeholder="https://docs.google.com/spreadsheets/d/..."
+              dir="ltr"
+              className="w-full bg-surface-container border border-outline-variant rounded-md px-3 py-2 text-sm
+                text-on-surface placeholder:text-outline focus:outline-none focus:border-primary"
+              autoFocus
+            />
+            {pasteError && (
+              <p className="text-xs text-error text-right">{pasteError}</p>
+            )}
+            <div className="flex gap-2 justify-start">
+              <button
+                onClick={handlePasteConfirm}
+                disabled={pasteLoading || !pasteValue.trim()}
+                className="text-sm font-bold bg-primary-container text-on-primary-container rounded-md px-4 py-2 hover:opacity-90 transition-opacity disabled:opacity-50"
+              >
+                {pasteLoading ? '...' : 'אישור ←'}
+              </button>
+              <button
+                onClick={() => { setMode('recent'); setPasteValue(''); setPasteError(null) }}
+                className="text-sm font-bold text-on-surface-variant border border-outline-variant rounded-md px-4 py-2 hover:bg-surface-container transition-colors"
+              >
+                ביטול
+              </button>
+            </div>
           </div>
         )}
 

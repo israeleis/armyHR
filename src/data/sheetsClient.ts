@@ -10,9 +10,17 @@ export function toA1(row: number, col: number): string {
   return `${colStr}${row + 1}`
 }
 
-/** Range for a whole sheet tab */
+/** Safely quote a sheet tab name for use in A1 range notation.
+ *  Google Sheets requires single-quoting when the name contains
+ *  non-ASCII characters (Hebrew), spaces, or other special chars.
+ *  Single quotes inside the name itself are escaped by doubling them. */
+export function quotedSheetName(name: string): string {
+  return `'${name.replace(/'/g, "''")}'`
+}
+
+/** Full URL-encoded range for a whole sheet tab */
 export function sheetRange(sheetName: string): string {
-  return encodeURIComponent(sheetName)
+  return encodeURIComponent(quotedSheetName(sheetName))
 }
 
 export interface SheetFile {
@@ -68,7 +76,7 @@ export interface CellUpdate {
 /** Write a single cell value (Sheets API v4 batchUpdate values) */
 export async function updateCell(token: string, update: CellUpdate): Promise<void> {
   const a1 = toA1(update.row, update.col)
-  const range = `${update.sheetName}!${a1}`
+  const range = `${quotedSheetName(update.sheetName)}!${a1}`
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${update.spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`
   const res = await fetch(url, {
     method: 'PUT',
@@ -90,7 +98,7 @@ export async function readCell(
   col: number,
 ): Promise<string> {
   const a1 = toA1(row, col)
-  const range = `${sheetName}!${a1}`
+  const range = `${quotedSheetName(sheetName)}!${a1}`
   const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
   if (!res.ok) throw new Error(`Sheets API read ${res.status}: ${await res.text()}`)

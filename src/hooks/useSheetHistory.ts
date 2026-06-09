@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export interface SheetEntry { id: string; name: string }
+export interface SheetEntry { id: string; name: string; tabName: string; readOnly: boolean }
 
 const HISTORY_KEY = 'army-hr-sheet-history'
 const MAX_HISTORY = 20

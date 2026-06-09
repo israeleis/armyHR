@@ -13,19 +13,30 @@ import {
   type FolderContents,
 } from '@/data/sheetsClient'
 import { useSheetHistory } from '@/hooks/useSheetHistory'
+import { SheetConfigDialog } from './SheetConfigDialog'
 
 const SELECTED_SHEET_KEY = 'army-hr-sheet'
 
-export function getSelectedSheet(): { id: string; name: string } | null {
+export interface SelectedSheet {
+  id: string
+  name: string
+  tabName: string
+  readOnly: boolean
+}
+
+export function getSelectedSheet(): SelectedSheet | null {
   try {
     const raw = localStorage.getItem(SELECTED_SHEET_KEY)
-    return raw ? JSON.parse(raw) : null
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed.tabName) return null  // old format — force re-pick
+    return parsed as SelectedSheet
   } catch {
     return null
   }
 }
 
-export function setSelectedSheet(sheet: { id: string; name: string }) {
+export function setSelectedSheet(sheet: SelectedSheet) {
   localStorage.setItem(SELECTED_SHEET_KEY, JSON.stringify(sheet))
 }
 
@@ -57,6 +68,7 @@ export function SheetPickerScreen() {
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const [folderStack, setFolderStack] = useState<FolderItem[]>([])
+  const [configSheet, setConfigSheet] = useState<SheetFile | null>(null)
 
   // Browse: pagination extras (first page from React Query; extras accumulate on "load more")
   const [extraFolders, setExtraFolders] = useState<FolderItem[]>([])
@@ -173,8 +185,11 @@ export function SheetPickerScreen() {
   })
 
   function selectSheet(sheet: SheetFile) {
-    const entry = { id: sheet.id, name: sheet.name }
-    localStorage.setItem(SELECTED_SHEET_KEY, JSON.stringify(entry))
+    setConfigSheet(sheet)
+  }
+
+  function handleConfigConfirm(entry: SelectedSheet) {
+    setSelectedSheet(entry)
     addSheet(entry)
     navigate('/diary', { replace: true })
   }
@@ -405,6 +420,15 @@ export function SheetPickerScreen() {
         <div className="p-4 border-t border-outline-variant text-xs text-on-surface-variant text-center">
           גיליון נוכחי: <span className="font-mono text-primary">{getSelectedSheet()?.name}</span>
         </div>
+      )}
+
+      {configSheet && (
+        <SheetConfigDialog
+          spreadsheetId={configSheet.id}
+          spreadsheetName={configSheet.name}
+          onConfirm={handleConfigConfirm}
+          onCancel={() => setConfigSheet(null)}
+        />
       )}
     </div>
   )

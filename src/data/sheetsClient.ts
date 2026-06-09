@@ -190,3 +190,18 @@ export async function getSpreadsheetTitle(token: string, spreadsheetId: string):
   if (!title) throw new Error(`Sheets API returned no title for ${spreadsheetId}`)
   return title
 }
+
+/** Check if the current user has edit permission on a spreadsheet. */
+export async function canEditSpreadsheet(token: string, spreadsheetId: string): Promise<boolean> {
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${spreadsheetId}?fields=capabilities.canEdit`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    )
+    if (!res.ok) return false
+    const data = await res.json()
+    return data?.capabilities?.canEdit === true
+  } catch {
+    return false
+  }
+}

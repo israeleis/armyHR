@@ -201,7 +201,7 @@ export function DailyDetailScreen() {
     const oldCode = localOverrides.get(overrideKey) ?? entry.code
     setLocalOverrides(prev => new Map(prev).set(overrideKey, newCode))
 
-    const sheetName = 'Sheet1'
+    const sheetName = sheet.tabName
     const snap = await getSnapshot(sheet.id, sheetName)
     if (snap) {
       const updated = applyWriteToSnapshot(snap.rawValues, entry.sourceCell.row, entry.sourceCell.col, newCode)

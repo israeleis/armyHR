@@ -33,9 +33,11 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     if (open) refresh()
   }, [open])
 
-  function handleSelectSheet(sheet: { id: string; name: string }) {
-    addSheet(sheet)
-    setSelectedSheet(sheet)
+  function handleSelectSheet(sheet: { id: string; name: string; tabName?: string; readOnly?: boolean }) {
+    if (!sheet.tabName) return  // stale history entry without tabName — skip
+    const entry = { id: sheet.id, name: sheet.name, tabName: sheet.tabName, readOnly: sheet.readOnly ?? false }
+    addSheet(entry)
+    setSelectedSheet(entry)
     onClose()
     navigate('/diary')
   }

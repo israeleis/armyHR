@@ -6,7 +6,7 @@ const HISTORY_KEY = 'army-hr-sheet-history'
 
 beforeEach(() => localStorage.clear())
 
-const makeSheet = (n: number): SheetEntry => ({ id: `id-${n}`, name: `Sheet ${n}` })
+const makeSheet = (n: number): SheetEntry => ({ id: `id-${n}`, name: `Sheet ${n}`, tabName: `Tab ${n}`, readOnly: false })
 
 describe('useSheetHistory', () => {
   it('starts with empty history when nothing stored', () => {

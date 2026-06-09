@@ -191,17 +191,20 @@ export async function getSpreadsheetTitle(token: string, spreadsheetId: string):
   return title
 }
 
-/** Check if the current user has edit permission on a spreadsheet. */
+/** Check if the current user has edit permission on a spreadsheet.
+ *  Uses `role` instead of `capabilities.canEdit` — the latter is unreliable
+ *  with a drive.readonly token even when the user is an owner/writer. */
 export async function canEditSpreadsheet(token: string, spreadsheetId: string): Promise<boolean> {
   try {
     const res = await fetch(
-      `https://www.googleapis.com/drive/v3/files/${spreadsheetId}?fields=capabilities.canEdit`,
+      `https://www.googleapis.com/drive/v3/files/${spreadsheetId}?fields=role`,
       { headers: { Authorization: `Bearer ${token}` } },
     )
-    if (!res.ok) return false
+    if (!res.ok) return true  // default to writable on API error
     const data = await res.json()
-    return data?.capabilities?.canEdit === true
+    const role: string = data?.role ?? ''
+    return ['owner', 'organizer', 'fileOrganizer', 'writer'].includes(role)
   } catch {
-    return false
+    return true  // default to writable if check fails
   }
 }

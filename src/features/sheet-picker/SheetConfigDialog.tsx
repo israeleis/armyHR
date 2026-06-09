@@ -66,11 +66,11 @@ export function SheetConfigDialog({ spreadsheetId, spreadsheetName, onConfirm, o
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-lg bg-surface-container rounded-t-2xl p-5 space-y-4 max-h-[80vh] flex flex-col"
+        className="w-full max-w-lg bg-surface-container rounded-2xl p-5 space-y-4 max-h-[70vh] flex flex-col"
         dir="rtl"
         onClick={e => e.stopPropagation()}
       >

@@ -26,7 +26,7 @@ const STATUS_GROUPS = [
 // ─── Local sub-components ────────────────────────────────────────────────────
 
 function CollapsibleSection({
-  id, label, count, expanded, onToggle, dimmed = false, children,
+  label, count, expanded, onToggle, dimmed = false, children,
 }: {
   id: string; label: string; count: number; expanded: boolean
   onToggle: () => void; dimmed?: boolean; children: ReactNode

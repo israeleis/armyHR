@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGoogleAuth } from './useGoogleAuth'
 import { useAuth } from '@/contexts/AuthContext'
+import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
 
 export function SignInScreen() {
   const { isSignedIn } = useAuth()
@@ -9,7 +10,10 @@ export function SignInScreen() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (isSignedIn) navigate('/sheets', { replace: true })
+    if (isSignedIn) {
+      const destination = getSelectedSheet() ? '/diary' : '/sheets'
+      navigate(destination, { replace: true })
+    }
   }, [isSignedIn, navigate])
 
   return (

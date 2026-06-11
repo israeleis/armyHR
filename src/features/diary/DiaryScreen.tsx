@@ -154,7 +154,7 @@ export function DiaryScreen() {
             {/* RTL carousel: scroll direction matches RTL reading order */}
             <div
               ref={carouselRef}
-              className="flex flex-row-reverse gap-2 overflow-x-auto no-scrollbar pb-1"
+              className="flex gap-2 overflow-x-auto no-scrollbar pb-1"
               style={{ direction: 'rtl' }}
             >
               {dates.map(date => {

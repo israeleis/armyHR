@@ -328,7 +328,7 @@ export function DiaryScreen() {
       {/* FAB — fixed above bottom nav */}
       <button
         onClick={() => navigate(`/diary/${activeDateKey}`)}
-        className="fixed bottom-20 left-4 w-14 h-14 rounded-full bg-primary-container text-on-primary-container text-2xl font-bold shadow-lg flex items-center justify-center z-20 hover:opacity-90 transition-opacity"
+        className="fixed bottom-4 left-4 w-14 h-14 rounded-full bg-primary-container text-on-primary-container text-2xl font-bold shadow-lg flex items-center justify-center z-20 hover:opacity-90 transition-opacity"
         aria-label="פתח יומן"
       >
         +

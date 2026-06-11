@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { createHashRouter, Outlet, Navigate } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { Sidebar } from '@/components/Sidebar'
-import { BottomNav } from '@/components/BottomNav'
 import { OfflineBadge } from '@/components/OfflineBadge'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
@@ -23,10 +22,9 @@ function AppLayout() {
       />
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <OfflineBadge />
-      <div className="flex-1 flex flex-col pb-16">
+      <div className="flex-1 flex flex-col">
         <Outlet />
       </div>
-      <BottomNav />
     </div>
   )
 }

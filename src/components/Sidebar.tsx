@@ -1,8 +1,38 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSheetHistory } from '@/hooks/useSheetHistory'
 import { getSelectedSheet, setSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
+
+const NAV_ITEMS = [
+  {
+    to: '/diary', label: 'יומן',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>
+      </svg>
+    ),
+  },
+  {
+    to: '/trends', label: 'מגמות',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+    ),
+  },
+  {
+    to: '/import', label: 'ייבוא',
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+    ),
+  },
+]
 
 interface SidebarProps {
   open: boolean
@@ -23,6 +53,7 @@ function TrashIcon() {
 
 export function Sidebar({ open, onClose }: SidebarProps) {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const { signOut } = useAuth()
   const { history, addSheet, removeSheet, refresh } = useSheetHistory()
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null)
@@ -78,6 +109,26 @@ export function Sidebar({ open, onClose }: SidebarProps) {
           open ? 'translate-x-0' : 'translate-x-full',
         ].join(' ')}
       >
+        {/* Navigation */}
+        <nav className="px-3 pt-3 pb-2 border-b border-outline-variant space-y-0.5">
+          {NAV_ITEMS.map(({ to, label, icon }) => {
+            const active = pathname.startsWith(to)
+            return (
+              <button
+                key={to}
+                onClick={() => { navigate(to); onClose() }}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-bold transition-colors text-right
+                  ${active
+                    ? 'bg-primary-container text-on-primary-container'
+                    : 'text-on-surface-variant hover:bg-surface-high hover:text-on-surface'}`}
+              >
+                <span className="shrink-0">{icon}</span>
+                <span className="flex-1">{label}</span>
+              </button>
+            )
+          })}
+        </nav>
+
         {/* Section label */}
         <div className="px-4 pt-4 pb-2">
           <span className="text-[11px] font-mono font-bold text-primary uppercase tracking-wider">

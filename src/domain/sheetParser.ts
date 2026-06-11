@@ -50,9 +50,9 @@ function tryParseDate(value: string): Date | null {
     if (!isNaN(native.getTime())) return native
   }
 
-  // 2. Extract a dd/MM(/yy|/yyyy)? pattern from anywhere in the string
-  //    (header cells often contain extra text like "יום א' 12/03" or "12/03/24 מרץ")
-  const dateMatch = v.match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/)
+  // 2. Extract a dd/MM(/yy|/yyyy)? pattern from anywhere in the string.
+  //    Handles both slash (28/02) and dot (28.02) separators.
+  const dateMatch = v.match(/(\d{1,2})[\/.](\d{1,2})(?:[\/.](\d{2,4}))?/)
   if (dateMatch) {
     const [, dd, mm, yy] = dateMatch
     const ref = new Date()
@@ -79,8 +79,19 @@ export function parseSheet(rawValues: string[][]): ParseResult {
     return { soldiers, statuses, schema: emptySchema(), warnings }
   }
 
-  // Find header row (first non-empty row)
-  let headerRowIdx = rawValues.findIndex(row => row.some(c => c.trim()))
+  // Find header row: first row that contains at least one recognised soldier alias or date.
+  // This skips merged title rows (e.g. "ניהול כוח אדם 2026") that sit above the real headers.
+  let headerRowIdx = -1
+  for (let i = 0; i < rawValues.length; i++) {
+    const row = rawValues[i]
+    if (!row.some(c => c.trim())) continue
+    const hasAlias = row.some(c => SOLDIER_ALIASES[normaliseHeader(c)])
+    const hasDate  = row.some(c => tryParseDate(c) !== null)
+    if (hasAlias || hasDate) { headerRowIdx = i; break }
+  }
+  // Fallback: first non-empty row
+  if (headerRowIdx === -1)
+    headerRowIdx = rawValues.findIndex(row => row.some(c => c.trim()))
   if (headerRowIdx === -1) {
     warnings.push('No header row found')
     return { soldiers, statuses, schema: emptySchema(), warnings }

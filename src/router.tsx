@@ -11,11 +11,26 @@ import { SoldierScreen } from '@/features/soldier/SoldierScreen'
 import { TrendsScreen } from '@/features/trends/TrendsScreen'
 import { ImportScreen } from '@/features/import/ImportScreen'
 
+function useIsOnline() {
+  const [online, setOnline] = useState(navigator.onLine)
+  useEffect(() => {
+    const on  = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online',  on)
+    window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [])
+  return online
+}
+
 function AppLayout() {
   const { isSignedIn } = useAuth()
+  const isOnline = useIsOnline()
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
-  if (!isSignedIn) return <Navigate to="/signin" replace />
+  // Only block access when ONLINE and not authenticated.
+  // Offline: allow cached data to show; redirect when connectivity returns.
+  if (isOnline && !isSignedIn) return <Navigate to="/signin" replace />
 
   return (
     <div className="flex flex-col min-h-screen bg-background">

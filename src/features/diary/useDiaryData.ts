@@ -7,9 +7,10 @@ import { parseSheet } from '@/domain/sheetParser'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
 import type { ParseResult } from '@/domain/types'
 
-async function fetchAndCacheSheet(token: string, spreadsheetId: string, tabName: string): Promise<ParseResult> {
+async function fetchAndCacheSheet(token: string | null, spreadsheetId: string, tabName: string): Promise<ParseResult> {
   let rawValues: string[][]
   try {
+    if (!token) throw new Error('no token')
     rawValues = await getSheetValues(token, spreadsheetId, tabName)
     await saveSnapshot(spreadsheetId, tabName, rawValues)
   } catch (err) {
@@ -27,8 +28,9 @@ export function useDiaryData() {
 
   const query = useQuery({
     queryKey: ['diary', sheet?.id, sheet?.tabName, token],
-    queryFn: () => fetchAndCacheSheet(token!, sheet!.id, sheet!.tabName),
-    enabled: !!token && !!sheet,
+    queryFn: () => fetchAndCacheSheet(token, sheet!.id, sheet!.tabName),
+    // Run when sheet is selected — even without a token (offline cache fallback)
+    enabled: !!sheet,
     staleTime: 1000 * 60 * 5,
     retry: false,
   })

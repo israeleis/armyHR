@@ -1,17 +1,20 @@
-import { useState, useMemo, type ReactNode } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useMemo, useEffect, type ReactNode } from 'react'
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useDiaryData } from '@/features/diary/useDiaryData'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StatusPicker } from './StatusPicker'
 import { FilterPane } from '@/components/FilterPane'
+import { SaveViewDialog } from '@/components/SaveViewDialog'
 import {
   emptyFilterState, isFilterActive, activeFilterCount,
   buildFilterSections, applySoldierFilter,
   toggleMultiSelect, clearMultiKey, setTextFilter,
+  decodeFilterState,
   type FilterState,
 } from '@/features/filters'
+import { useSavedViews } from '@/hooks/useSavedViews'
 import { enqueueWrite } from '@/data/writeQueue'
 import { getSnapshot, saveSnapshot, applyWriteToSnapshot } from '@/data/localCache'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
@@ -129,8 +132,12 @@ export function DailyDetailScreen() {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null)
   const [localOverrides, setLocalOverrides] = useState<Map<string, string>>(new Map())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['present']))
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [filterOpen, setFilterOpen] = useState(false)
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const { saveView: persistView } = useSavedViews()
 
   const sheet = getSelectedSheet()
 
@@ -205,6 +212,18 @@ export function DailyDetailScreen() {
     return { unknownCodeSoldiers: unknown, noStatusSoldiers: absent }
   }, [visibleSoldiers, entryBySoldierId])
 
+  // Apply pending filter from sidebar navigation or shared URL (mount only)
+  useEffect(() => {
+    const pending = (location.state as { pendingFilter?: FilterState } | null)?.pendingFilter
+    if (pending) { setFilterState(pending); return }
+    const encoded = searchParams.get('filter')
+    if (encoded) {
+      const decoded = decodeFilterState(encoded)
+      if (decoded) setFilterState(decoded)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   function toggleGroup(id: string) {
     setExpandedGroups(prev => {
       const next = new Set(prev)
@@ -248,6 +267,12 @@ export function DailyDetailScreen() {
       onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
       onTextChange={(key, val) => setFilterState(s => setTextFilter(s, key, val))}
       onClearAll={() => setFilterState(emptyFilterState())}
+      onSaveRequest={() => setSaveDialogOpen(true)}
+    />
+    <SaveViewDialog
+      open={saveDialogOpen}
+      onClose={() => setSaveDialogOpen(false)}
+      onSave={async (name) => { await persistView({ name, view: '/diary', filterState }) }}
     />
     <div className="flex flex-col h-screen overflow-hidden bg-background">
       {/* Header */}

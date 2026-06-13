@@ -17,6 +17,7 @@ export const KNOWN_STATUSES: StatusDef[] = [
   { code: 'ל',   name: 'סגירת שמ״פ',  inArmy: false, isPaid: true  },
   { code: 'פ',   name: 'פתיחת שמ״פ',  inArmy: true,  isPaid: true  },
   { code: 'חול', name: 'חול',           inArmy: false, isPaid: false },
+  { code: 'מ',   name: 'ימי התארגנות', inArmy: false, isPaid: true  },
 ]
 
 const STATUS_MAP = new Map(KNOWN_STATUSES.map(s => [s.code, s]))

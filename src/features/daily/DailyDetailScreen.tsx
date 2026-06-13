@@ -24,12 +24,12 @@ interface EditingCell {
   soldierName: string
 }
 
-// Group ordering: present first, then all in-army, then out-paid, then out-free
 const STATUS_GROUPS = [
-  { id: 'present',  label: 'נוכח',           codes: new Set(['נ']) },
-  { id: 'in-army',  label: 'בסיס',           codes: new Set([...IN_ARMY_CODES].filter(c => c !== 'נ')) },
-  { id: 'out-paid', label: 'חוץ (משלמים)',   codes: OUT_PAID_CODES },
-  { id: 'out-free', label: 'חוץ (לא משלמים)', codes: OUT_FREE_CODES },
+  { id: 'present',   label: 'נוכח',         codes: new Set(['נ']) },
+  { id: 'transit',   label: 'בדרכים',        codes: new Set(['יח', 'חי', 'י', 'ח', 'פ']) },
+  { id: 'medical',   label: 'גימלים',         codes: new Set(['ג']) },
+  { id: 'home-paid', label: 'בבית בתשלום',  codes: new Set(['ת', 'ל', 'מ']) },
+  { id: 'released',  label: 'משוחרר',         codes: OUT_FREE_CODES },
 ]
 
 // ─── Local sub-components ────────────────────────────────────────────────────
@@ -163,14 +163,15 @@ export function DailyDetailScreen() {
   const stats = useMemo(() => {
     const total = visibleSoldiers.length
     const visibleIds = new Set(visibleSoldiers.map(s => s.id))
-    let inArmy = 0, outPaid = 0, outFree = 0
+    let inArmy = 0, medical = 0, homePaid = 0, released = 0
     for (const e of entriesForDate) {
       if (!visibleIds.has(e.soldierId)) continue
-      if (IN_ARMY_CODES.has(e.code)) inArmy++
-      else if (OUT_PAID_CODES.has(e.code)) outPaid++
-      else if (OUT_FREE_CODES.has(e.code)) outFree++
+      if (e.code === 'ג') medical++
+      else if (IN_ARMY_CODES.has(e.code)) inArmy++
+      else if (OUT_PAID_CODES.has(e.code)) homePaid++
+      else if (OUT_FREE_CODES.has(e.code)) released++
     }
-    return { total, inArmy, outPaid, outFree }
+    return { total, inArmy, medical, homePaid, released }
   }, [entriesForDate, visibleSoldiers])
 
   const groupedSoldiers = useMemo(() => {
@@ -229,10 +230,10 @@ export function DailyDetailScreen() {
   }
 
   const statBoxes = [
-    { label: 'בסיס',          value: stats.inArmy,  color: '#c3cc8c' },
-    { label: 'כולל',           value: stats.total,   color: '#e5e2e1' },
-    { label: 'חוץ (משלמים)',  value: stats.outPaid,  color: '#f4d35e' },
-    { label: 'חוץ (ללא שכר)', value: stats.outFree,  color: '#f5cac3' },
+    { label: 'בסיס',         value: stats.inArmy,   color: '#c3cc8c' },
+    { label: 'גימלים',        value: stats.medical,  color: '#60a5fa' },
+    { label: 'בבית בתשלום',  value: stats.homePaid, color: '#f4d35e' },
+    { label: 'משוחרר',        value: stats.released, color: '#f87171' },
   ]
 
   return (

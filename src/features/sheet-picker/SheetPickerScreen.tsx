@@ -191,7 +191,7 @@ export function SheetPickerScreen() {
   function handleConfigConfirm(entry: SelectedSheet) {
     setSelectedSheet(entry)
     addSheet(entry)
-    navigate('/diary', { replace: true })
+    navigate('/trends', { replace: true })
   }
 
   const isSearchPending = searchQuery.length > 0 && debouncedQuery !== searchQuery

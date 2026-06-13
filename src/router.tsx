@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createHashRouter, Outlet, Navigate } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { Sidebar } from '@/components/Sidebar'
+import { useAuth } from '@/contexts/AuthContext'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
 import { DiaryScreen } from '@/features/diary/DiaryScreen'
@@ -11,7 +12,10 @@ import { TrendsScreen } from '@/features/trends/TrendsScreen'
 import { ImportScreen } from '@/features/import/ImportScreen'
 
 function AppLayout() {
+  const { isSignedIn } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  if (!isSignedIn) return <Navigate to="/signin" replace />
 
   return (
     <div className="flex flex-col min-h-screen bg-background">

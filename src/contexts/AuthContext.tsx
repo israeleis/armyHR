@@ -16,25 +16,25 @@ const AuthContext = createContext<AuthState | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(
-    () => sessionStorage.getItem(TOKEN_KEY)
+    () => localStorage.getItem(TOKEN_KEY)
   )
   const [userEmail, setUserEmail] = useState<string | null>(
-    () => sessionStorage.getItem(EMAIL_KEY)
+    () => localStorage.getItem(EMAIL_KEY)
   )
 
   const signIn = () => { /* implemented in useGoogleAuth hook */ }
 
   const signOut = () => {
-    sessionStorage.removeItem(TOKEN_KEY)
-    sessionStorage.removeItem(EMAIL_KEY)
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(EMAIL_KEY)
     setTokenState(null)
     setUserEmail(null)
   }
 
   const setToken = (t: string, email?: string) => {
-    sessionStorage.setItem(TOKEN_KEY, t)
+    localStorage.setItem(TOKEN_KEY, t)
     if (email) {
-      sessionStorage.setItem(EMAIL_KEY, email)
+      localStorage.setItem(EMAIL_KEY, email)
       setUserEmail(email)
     }
     setTokenState(t)

@@ -6,17 +6,7 @@ import { getSelectedSheet, setSelectedSheet } from '@/features/sheet-picker/Shee
 
 const NAV_ITEMS = [
   {
-    to: '/diary', label: 'יומן',
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-        <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
-        <line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>
-      </svg>
-    ),
-  },
-  {
-    to: '/trends', label: 'מגמות',
+    to: '/trends', label: 'דשבורד',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -24,11 +14,12 @@ const NAV_ITEMS = [
     ),
   },
   {
-    to: '/import', label: 'ייבוא',
+    to: '/diary', label: 'יומן',
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-        <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="16" y2="14"/>
       </svg>
     ),
   },
@@ -56,7 +47,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const { pathname } = useLocation()
   const { signOut } = useAuth()
   const { history, addSheet, removeSheet, refresh } = useSheetHistory()
-  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null)
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string; tabName: string } | null>(null)
   const activeSheet = getSelectedSheet()
 
   // Re-read localStorage when drawer opens so sheets added via /sheets page appear
@@ -70,12 +61,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     addSheet(entry)
     setSelectedSheet(entry)
     onClose()
-    navigate('/diary')
+    navigate('/trends')
   }
 
   function handleConfirmRemove() {
     if (removeTarget) {
-      removeSheet(removeTarget.id)
+      removeSheet(removeTarget.id, removeTarget.tabName)
       setRemoveTarget(null)
     }
   }
@@ -144,10 +135,10 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             </p>
           )}
           {history.map(sheet => {
-            const isActive = sheet.id === activeSheet?.id
+            const isActive = sheet.id === activeSheet?.id && sheet.tabName === activeSheet?.tabName
             return (
               <div
-                key={sheet.id}
+                key={`${sheet.id}-${sheet.tabName}`}
                 className={[
                   'flex items-center gap-2 rounded-md px-3',
                   isActive
@@ -156,11 +147,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 ].join(' ')}
               >
                 <button
-                  className="flex-1 text-sm font-medium text-right truncate min-w-0 py-2.5"
+                  className="flex-1 text-right truncate min-w-0 py-2.5"
                   onClick={() => !isActive && handleSelectSheet(sheet)}
                   disabled={isActive}
                 >
-                  {sheet.name}
+                  <div className="text-sm font-medium truncate">{sheet.name}</div>
+                  {sheet.tabName && (
+                    <div className="text-[10px] font-mono opacity-60 truncate">{sheet.tabName}</div>
+                  )}
                 </button>
                 {isActive && (
                   <span className="text-[10px] font-mono shrink-0 opacity-60">✓ פעיל</span>

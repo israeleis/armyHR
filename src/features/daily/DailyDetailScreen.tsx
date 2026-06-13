@@ -5,10 +5,18 @@ import { he } from 'date-fns/locale'
 import { useDiaryData } from '@/features/diary/useDiaryData'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StatusPicker } from './StatusPicker'
+import { FilterPane } from '@/components/FilterPane'
+import {
+  emptyFilterState, isFilterActive, activeFilterCount,
+  buildFilterSections, applySoldierFilter,
+  toggleMultiSelect, clearMultiKey, setTextFilter,
+  type FilterState,
+} from '@/features/filters'
 import { enqueueWrite } from '@/data/writeQueue'
 import { getSnapshot, saveSnapshot, applyWriteToSnapshot } from '@/data/localCache'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
 import type { StatusEntry, SoldierFields } from '@/domain/types'
+import { IN_ARMY_CODES, OUT_PAID_CODES, OUT_FREE_CODES } from '@/domain/statuses'
 
 interface EditingCell {
   entry: StatusEntry
@@ -16,11 +24,12 @@ interface EditingCell {
   soldierName: string
 }
 
+// Group ordering: present first, then all in-army, then out-paid, then out-free
 const STATUS_GROUPS = [
-  { id: 'present',  label: 'נוכח',        codes: new Set(['נ']) },
-  { id: 'transit',  label: 'בתנועה',       codes: new Set(['י', 'ח', 'יח', 'חי', 'מ', 'פ', 'ל']) },
-  { id: 'outside',  label: 'מחוץ ליחידה', codes: new Set(['ב', 'חול']) },
-  { id: 'medical',  label: 'חריגים',       codes: new Set(['ג', 'ת']) },
+  { id: 'present',  label: 'נוכח',           codes: new Set(['נ']) },
+  { id: 'in-army',  label: 'בסיס',           codes: new Set([...IN_ARMY_CODES].filter(c => c !== 'נ')) },
+  { id: 'out-paid', label: 'חוץ (משלמים)',   codes: OUT_PAID_CODES },
+  { id: 'out-free', label: 'חוץ (לא משלמים)', codes: OUT_FREE_CODES },
 ]
 
 // ─── Local sub-components ────────────────────────────────────────────────────
@@ -120,6 +129,8 @@ export function DailyDetailScreen() {
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null)
   const [localOverrides, setLocalOverrides] = useState<Map<string, string>>(new Map())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(['present']))
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
 
   const sheet = getSelectedSheet()
 
@@ -143,22 +154,28 @@ export function DailyDetailScreen() {
   }, [entriesForDate])
 
   const stats = useMemo(() => {
-    const total = data?.soldiers.length ?? 0
-    let present = 0, transit = 0, anomalies = 0
+    const total = visibleSoldiers.length
+    let inArmy = 0, outPaid = 0, outFree = 0
     for (const e of entriesForDate) {
-      const code = e.code
-      if (STATUS_GROUPS[0].codes.has(code)) present++
-      else if (STATUS_GROUPS[1].codes.has(code)) transit++
-      else if (STATUS_GROUPS[3].codes.has(code)) anomalies++
+      if (!visibleSoldiers.find(s => s.id === e.soldierId)) continue
+      if (IN_ARMY_CODES.has(e.code)) inArmy++
+      else if (OUT_PAID_CODES.has(e.code)) outPaid++
+      else if (OUT_FREE_CODES.has(e.code)) outFree++
     }
-    return { total, present, transit, anomalies }
-  }, [entriesForDate, data])
+    return { total, inArmy, outPaid, outFree }
+  }, [entriesForDate, visibleSoldiers])
+
+  const filterSections = useMemo(() => buildFilterSections(data?.soldiers ?? []), [data?.soldiers])
+
+  const visibleSoldiers = useMemo(() => {
+    if (!data) return []
+    return applySoldierFilter(data.soldiers, filterState)
+  }, [data, filterState])
 
   const groupedSoldiers = useMemo(() => {
-    if (!data) return []
     return STATUS_GROUPS.map(group => {
       const soldiers: Array<{ soldier: SoldierFields; entry: StatusEntry | undefined; code: string }> = []
-      for (const soldier of data.soldiers) {
+      for (const soldier of visibleSoldiers) {
         const entry = entryBySoldierId.get(soldier.id)
         const code = entry?.code ?? ''
         if (group.codes.has(code)) {
@@ -167,17 +184,16 @@ export function DailyDetailScreen() {
       }
       return { ...group, soldiers }
     }).filter(g => g.soldiers.length > 0)
-  }, [data, entryBySoldierId])
+  }, [visibleSoldiers, entryBySoldierId])
 
   // Soldiers not in any STATUS_GROUP:
   // - unknownCodeSoldiers: non-empty code the groups don't cover → show in "אחר"
   // - noStatusSoldiers:    empty / no entry for this date        → show in "ללא סטטוס"
   const { unknownCodeSoldiers, noStatusSoldiers } = useMemo(() => {
-    if (!data) return { unknownCodeSoldiers: [] as SoldierFields[], noStatusSoldiers: [] as SoldierFields[] }
     const allGroupCodes = new Set(STATUS_GROUPS.flatMap(g => [...g.codes]))
     const unknown: SoldierFields[] = []
     const absent: SoldierFields[] = []
-    for (const s of data.soldiers) {
+    for (const s of visibleSoldiers) {
       const entry = entryBySoldierId.get(s.id)
       const code = entry?.code ?? ''
       if (allGroupCodes.has(code)) continue
@@ -185,7 +201,7 @@ export function DailyDetailScreen() {
       else absent.push(s)
     }
     return { unknownCodeSoldiers: unknown, noStatusSoldiers: absent }
-  }, [data, entryBySoldierId])
+  }, [visibleSoldiers, entryBySoldierId])
 
   function toggleGroup(id: string) {
     setExpandedGroups(prev => {
@@ -212,13 +228,25 @@ export function DailyDetailScreen() {
   }
 
   const statBoxes = [
-    { label: 'נוכח',   value: stats.present,   color: '#66ff33' },
-    { label: 'כולל',   value: stats.total,      color: '#c3cc8c' },
-    { label: 'חריגים', value: stats.anomalies,  color: '#f5cac3' },
-    { label: 'בדרכים', value: stats.transit,    color: '#f4d35e' },
+    { label: 'בסיס',          value: stats.inArmy,  color: '#c3cc8c' },
+    { label: 'כולל',           value: stats.total,   color: '#e5e2e1' },
+    { label: 'חוץ (משלמים)',  value: stats.outPaid,  color: '#f4d35e' },
+    { label: 'חוץ (ללא שכר)', value: stats.outFree,  color: '#f5cac3' },
   ]
 
   return (
+    <>
+    <FilterPane
+      open={filterOpen}
+      onClose={() => setFilterOpen(false)}
+      sections={filterSections}
+      multiSelect={filterState.multiSelect}
+      text={filterState.text}
+      onMultiToggle={(key, val) => setFilterState(s => toggleMultiSelect(s, key, val))}
+      onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
+      onTextChange={(key, val) => setFilterState(s => setTextFilter(s, key, val))}
+      onClearAll={() => setFilterState(emptyFilterState())}
+    />
     <div className="flex flex-col h-screen overflow-hidden bg-background">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-surface-container border-b border-outline-variant px-4 py-3">
@@ -248,10 +276,20 @@ export function DailyDetailScreen() {
               </svg>
             </button>
             {/* Filter / funnel */}
-            <button aria-label="סינון" className="text-on-surface-variant hover:text-on-surface transition-colors">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <button
+              aria-label="סינון"
+              onClick={() => setFilterOpen(true)}
+              className="relative text-on-surface-variant hover:text-on-surface transition-colors"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                style={{ color: isFilterActive(filterState) ? 'var(--color-primary)' : undefined }}>
                 <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
               </svg>
+              {isFilterActive(filterState) && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center px-0.5">
+                  {activeFilterCount(filterState)}
+                </span>
+              )}
             </button>
           </div>
         </div>
@@ -379,5 +417,6 @@ export function DailyDetailScreen() {
         />
       )}
     </div>
+    </>
   )
 }

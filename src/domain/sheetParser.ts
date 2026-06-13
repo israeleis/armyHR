@@ -115,7 +115,7 @@ export function parseSheet(rawValues: string[][]): ParseResult {
 
     // Status entries (wide → long)
     for (const [colIdx, date] of schema.dateColIndices) {
-      const code = (row[colIdx] ?? '').trim()
+      const code = (row[colIdx] ?? '').trim() || 'ב'
       const entry: StatusEntry = {
         soldierId: soldierFields.id || soldierFields.name,
         date,
@@ -165,6 +165,15 @@ function buildSchema(headerRow: string[], headerRowIdx: number, warnings: string
 
     if (raw.trim()) {
       extraColIndices.set(raw.trim(), c)
+    }
+  }
+
+  // Drop extra columns that appear after the last date column — those are
+  // post-date summary/formula columns, not soldier detail fields.
+  if (dateColIndices.size > 0) {
+    const lastDateCol = Math.max(...dateColIndices.keys())
+    for (const [key, col] of extraColIndices) {
+      if (col > lastDateCol) extraColIndices.delete(key)
     }
   }
 

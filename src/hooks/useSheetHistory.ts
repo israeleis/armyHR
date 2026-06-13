@@ -21,13 +21,13 @@ export function useSheetHistory() {
   const [history, setHistory] = useState<SheetEntry[]>(readHistory)
 
   const addSheet = (sheet: SheetEntry) => {
-    const next = [sheet, ...history.filter(s => s.id !== sheet.id)].slice(0, MAX_HISTORY)
+    const next = [sheet, ...history.filter(s => !(s.id === sheet.id && s.tabName === sheet.tabName))].slice(0, MAX_HISTORY)
     writeHistory(next)
     setHistory(next)
   }
 
-  const removeSheet = (id: string) => {
-    const next = history.filter(s => s.id !== id)
+  const removeSheet = (id: string, tabName: string) => {
+    const next = history.filter(s => !(s.id === id && s.tabName === tabName))
     writeHistory(next)
     setHistory(next)
   }

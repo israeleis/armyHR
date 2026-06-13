@@ -32,7 +32,7 @@ function AppLayout() {
 export const router = createHashRouter([
   {
     path: '/',
-    element: <Navigate to="/diary" replace />,
+    element: <Navigate to="/trends" replace />,
   },
   {
     path: '/',
@@ -45,7 +45,7 @@ export const router = createHashRouter([
       { path: 'import', element: <ImportScreen /> },
       { path: 'sheets', element: <SheetPickerScreen /> },
       { path: 'signin', element: <SignInScreen /> },
-      { path: '*', element: <Navigate to="/diary" replace /> },
+      { path: '*', element: <Navigate to="/trends" replace /> },
     ],
   },
 ])

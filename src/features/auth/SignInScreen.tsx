@@ -11,7 +11,7 @@ export function SignInScreen() {
 
   useEffect(() => {
     if (isSignedIn) {
-      const destination = getSelectedSheet() ? '/diary' : '/sheets'
+      const destination = getSelectedSheet() ? '/trends' : '/sheets'
       navigate(destination, { replace: true })
     }
   }, [isSignedIn, navigate])

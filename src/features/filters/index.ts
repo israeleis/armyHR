@@ -133,3 +133,44 @@ function getSoldierValue(s: SoldierFields, key: string): string {
   if (key.startsWith('extra:')) return s.extra[key.slice(6)] ?? ''
   return ((s as unknown as Record<string, unknown>)[key] as string | undefined) ?? ''
 }
+
+// ── Serialization (Set ↔ string[] for JSON/sheet storage) ─────────────────
+
+export interface SerializedFilterState {
+  multiSelect: Record<string, string[]>
+  text: Record<string, string>
+}
+
+export function serializeFilterState(state: FilterState): string {
+  const s: SerializedFilterState = {
+    multiSelect: Object.fromEntries(
+      Object.entries(state.multiSelect).map(([k, v]) => [k, [...v]])
+    ),
+    text: { ...state.text },
+  }
+  return JSON.stringify(s)
+}
+
+export function deserializeFilterState(json: string): FilterState {
+  const s = JSON.parse(json) as SerializedFilterState
+  return {
+    multiSelect: Object.fromEntries(
+      Object.entries(s.multiSelect ?? {}).map(([k, v]) => [k, new Set(v)])
+    ),
+    text: s.text ?? {},
+  }
+}
+
+// ── URL encoding (base64 JSON, for shared deep links) ─────────────────────
+
+export function encodeFilterState(state: FilterState): string {
+  return btoa(unescape(encodeURIComponent(serializeFilterState(state))))
+}
+
+export function decodeFilterState(encoded: string): FilterState | null {
+  try {
+    return deserializeFilterState(decodeURIComponent(escape(atob(encoded))))
+  } catch {
+    return null
+  }
+}

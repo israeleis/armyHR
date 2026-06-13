@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
 import { useSheetHistory } from '@/hooks/useSheetHistory'
+import { useSavedViews } from '@/hooks/useSavedViews'
 import { getSelectedSheet, setSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
+import type { FilterState } from '@/features/filters'
 
 const NAV_ITEMS = [
   {
@@ -42,12 +44,44 @@ function TrashIcon() {
   )
 }
 
+function ViewIcon({ view }: { view: string }) {
+  if (view === '/trends') return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>
+    </svg>
+  )
+  if (view.startsWith('/diary')) return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+    </svg>
+  )
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </svg>
+  )
+}
+
+function ChevronIcon({ open: isOpen }: { open: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={{ transition: 'transform 150ms', transform: isOpen ? 'rotate(0deg)' : 'rotate(-90deg)' }}>
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  )
+}
+
 export function Sidebar({ open, onClose }: SidebarProps) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { signOut } = useAuth()
   const { history, addSheet, removeSheet, refresh } = useSheetHistory()
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string; tabName: string } | null>(null)
+  const [savedViewsExpanded, setSavedViewsExpanded] = useState(true)
+  const [deactivatingId, setDeactivatingId] = useState<number | null>(null)
+  const { views, deactivateView: doDeactivate } = useSavedViews()
+  const activeViews = views.filter(v => v.active)
   const activeSheet = getSelectedSheet()
 
   // Re-read localStorage when drawer opens so sheets added via /sheets page appear
@@ -119,6 +153,59 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             )
           })}
         </nav>
+
+        {/* Saved views — collapsible */}
+        {activeViews.length > 0 && (
+          <div className="border-b border-outline-variant">
+            <button
+              onClick={() => setSavedViewsExpanded(e => !e)}
+              className="w-full flex items-center justify-between px-4 py-2.5"
+            >
+              <span className="text-[11px] font-mono font-bold text-primary uppercase tracking-wider">
+                תצוגות שמורות
+              </span>
+              <ChevronIcon open={savedViewsExpanded} />
+            </button>
+            {savedViewsExpanded && (
+              <div className="pb-2 px-3 space-y-0.5">
+                {activeViews.map(view => (
+                  <div key={view.rowIndex} className="flex items-center gap-1 rounded-md group">
+                    <button
+                      className="flex-1 flex items-center gap-2 px-2 py-2.5 text-right text-on-surface-variant hover:text-on-surface transition-colors min-w-0"
+                      onClick={() => {
+                        navigate(view.view, { state: { pendingFilter: view.filterState as FilterState } })
+                        onClose()
+                      }}
+                    >
+                      <span className="shrink-0 text-on-surface-variant/60">
+                        <ViewIcon view={view.view} />
+                      </span>
+                      <span className="text-sm font-medium truncate flex-1">{view.name}</span>
+                    </button>
+                    {deactivatingId === view.rowIndex ? (
+                      <button
+                        onClick={() => { doDeactivate(view.rowIndex); setDeactivatingId(null) }}
+                        className="text-[10px] font-bold text-error shrink-0 px-1.5 py-1 rounded border border-error/40 hover:bg-error/10 transition-colors"
+                      >
+                        הסתר
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setDeactivatingId(view.rowIndex)}
+                        className="opacity-0 group-hover:opacity-60 hover:!opacity-100 text-on-surface-variant transition-opacity shrink-0 p-1"
+                        aria-label="אפשרויות"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Section label */}
         <div className="px-4 pt-4 pb-2">

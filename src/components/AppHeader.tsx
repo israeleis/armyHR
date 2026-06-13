@@ -62,6 +62,21 @@ function SyncIcon({ spinning }: { spinning: boolean }) {
   )
 }
 
+function WifiOffIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round">
+      <line x1="1" y1="1" x2="23" y2="23" />
+      <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+      <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+      <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+      <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+      <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+      <circle cx="12" cy="20" r="1" fill="currentColor" />
+    </svg>
+  )
+}
+
 export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
   const { theme, toggleTheme } = useTheme()
   const sheet = getSelectedSheet()
@@ -120,21 +135,19 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
           <button
             onClick={handleSync}
             disabled={offline || isFetching}
-            aria-label={offline ? 'לא מחובר' : 'רענן נתונים'}
+            aria-label={offline ? 'לא מחובר — עובד על נתונים מקומיים' : 'רענן נתונים'}
+            title={offline ? 'אין חיבור לאינטרנט — מציג נתונים שמורים' : pending > 0 ? `${pending} שינויים ממתינים לסנכרון` : 'רענן נתונים'}
             className="relative flex items-center justify-center w-[44px] h-[44px] disabled:cursor-not-allowed"
             style={{ color: iconColor }}
           >
-            <SyncIcon spinning={spinning} />
+            {offline ? <WifiOffIcon /> : <SyncIcon spinning={spinning} />}
             {pending > 0 && (
               <span
                 className="absolute top-1.5 right-1.5 min-w-[16px] h-4 rounded-full text-[9px] font-bold flex items-center justify-center px-0.5 leading-none"
-                style={{ backgroundColor: offline ? '#f87171' : 'var(--color-primary)', color: offline ? '#fff' : 'var(--color-on-primary)' }}
+                style={{ backgroundColor: offline ? '#f87171' : 'var(--color-primary)', color: '#fff' }}
               >
                 {pending > 99 ? '99+' : pending}
               </span>
-            )}
-            {offline && pending === 0 && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-400" />
             )}
           </button>
 

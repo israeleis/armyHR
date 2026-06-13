@@ -153,24 +153,25 @@ export function DailyDetailScreen() {
     return map
   }, [entriesForDate])
 
-  const stats = useMemo(() => {
-    const total = visibleSoldiers.length
-    let inArmy = 0, outPaid = 0, outFree = 0
-    for (const e of entriesForDate) {
-      if (!visibleSoldiers.find(s => s.id === e.soldierId)) continue
-      if (IN_ARMY_CODES.has(e.code)) inArmy++
-      else if (OUT_PAID_CODES.has(e.code)) outPaid++
-      else if (OUT_FREE_CODES.has(e.code)) outFree++
-    }
-    return { total, inArmy, outPaid, outFree }
-  }, [entriesForDate, visibleSoldiers])
-
   const filterSections = useMemo(() => buildFilterSections(data?.soldiers ?? []), [data?.soldiers])
 
   const visibleSoldiers = useMemo(() => {
     if (!data) return []
     return applySoldierFilter(data.soldiers, filterState)
   }, [data, filterState])
+
+  const stats = useMemo(() => {
+    const total = visibleSoldiers.length
+    const visibleIds = new Set(visibleSoldiers.map(s => s.id))
+    let inArmy = 0, outPaid = 0, outFree = 0
+    for (const e of entriesForDate) {
+      if (!visibleIds.has(e.soldierId)) continue
+      if (IN_ARMY_CODES.has(e.code)) inArmy++
+      else if (OUT_PAID_CODES.has(e.code)) outPaid++
+      else if (OUT_FREE_CODES.has(e.code)) outFree++
+    }
+    return { total, inArmy, outPaid, outFree }
+  }, [entriesForDate, visibleSoldiers])
 
   const groupedSoldiers = useMemo(() => {
     return STATUS_GROUPS.map(group => {

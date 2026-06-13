@@ -47,11 +47,11 @@ describe('useSheetHistory', () => {
     expect(result.current.history[0]).toEqual(makeSheet(22))
   })
 
-  it('removeSheet removes by id', () => {
+  it('removeSheet removes by id + tabName', () => {
     const { result } = renderHook(() => useSheetHistory())
     act(() => { result.current.addSheet(makeSheet(1)) })
     act(() => { result.current.addSheet(makeSheet(2)) })
-    act(() => { result.current.removeSheet('id-1') })
+    act(() => { result.current.removeSheet('id-1', 'Tab 1') })
     expect(result.current.history).toEqual([makeSheet(2)])
   })
 
@@ -65,7 +65,7 @@ describe('useSheetHistory', () => {
   it('removeSheet persists to localStorage', () => {
     const { result } = renderHook(() => useSheetHistory())
     act(() => { result.current.addSheet(makeSheet(1)) })
-    act(() => { result.current.removeSheet('id-1') })
+    act(() => { result.current.removeSheet('id-1', 'Tab 1') })
     const stored = JSON.parse(localStorage.getItem(HISTORY_KEY)!)
     expect(stored).toEqual([])
   })

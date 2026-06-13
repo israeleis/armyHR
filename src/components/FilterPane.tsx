@@ -65,8 +65,7 @@ function CollapsibleSection({ label, badge, children }: { label: string; badge?:
 
 // ── Multi-select section content ───────────────────────────────────────────
 
-function MultiSelectContent({ sectionKey, options, selected, onToggle, onClear }: {
-  sectionKey: string
+function MultiSelectContent({ options, selected, onToggle, onClear }: {
   options: string[]
   selected: Set<string>
   onToggle: (v: string) => void
@@ -111,7 +110,7 @@ function MultiSelectContent({ sectionKey, options, selected, onToggle, onClear }
 
 // ── Text section content ───────────────────────────────────────────────────
 
-function TextContent({ sectionKey, value, onChange }: { sectionKey: string; value: string; onChange: (v: string) => void }) {
+function TextContent({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="relative">
       <input
@@ -162,9 +161,12 @@ export function FilterPane({
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant shrink-0">
           <span className="text-sm font-bold text-on-surface">סינון</span>
-          <button onClick={onClose} className="text-on-surface-variant flex items-center justify-center w-[36px] h-[36px]">
-            <CloseIcon />
-          </button>
+          <div className="flex items-center gap-1">
+            <button onClick={onClearAll} className="text-xs text-primary font-bold px-2 py-1">נקה הכל</button>
+            <button onClick={onClose} className="text-on-surface-variant flex items-center justify-center w-[36px] h-[36px]">
+              <CloseIcon />
+            </button>
+          </div>
         </div>
 
         {/* Sections */}
@@ -175,7 +177,6 @@ export function FilterPane({
               return (
                 <CollapsibleSection key={section.key} label={section.label} badge={selected.size || undefined}>
                   <MultiSelectContent
-                    sectionKey={section.key}
                     options={section.options}
                     selected={selected}
                     onToggle={v => onMultiToggle(section.key, v)}
@@ -188,7 +189,6 @@ export function FilterPane({
               return (
                 <CollapsibleSection key={section.key} label={section.label} badge={value.trim() ? 1 : undefined}>
                   <TextContent
-                    sectionKey={section.key}
                     value={value}
                     onChange={v => onTextChange(section.key, v)}
                   />

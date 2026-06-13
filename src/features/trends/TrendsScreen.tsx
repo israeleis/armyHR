@@ -4,15 +4,19 @@ import {
   PieChart, Pie, Cell,
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useDiaryData } from '@/features/diary/useDiaryData'
 import { FilterPane } from '@/components/FilterPane'
+import { SaveViewDialog } from '@/components/SaveViewDialog'
 import { isInArmy, isPaid, getStatus } from '@/domain/statuses'
 import {
   emptyFilterState, isFilterActive, activeFilterCount,
   buildFilterSections, applySoldierFilter,
   toggleMultiSelect, clearMultiKey, setTextFilter,
+  decodeFilterState,
   type FilterState,
 } from '@/features/filters'
+import { useSavedViews } from '@/hooks/useSavedViews'
 
 const TIME_TABS = ['שבועי', 'חודשי', 'כל הזמן'] as const
 type TimeTab = typeof TIME_TABS[number]
@@ -185,9 +189,13 @@ function TimeRangeSlider({
 
 export function TrendsScreen() {
   const { data, isLoading } = useDiaryData()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<TimeTab>('שבועי')
   const [filterOpen, setFilterOpen] = useState(false)
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
+  const { saveView: persistView } = useSavedViews()
   const [windowStartMs, setWindowStartMs] = useState<number | null>(null)
   const [windowEndMs, setWindowEndMs] = useState<number | null>(null)
 
@@ -219,6 +227,18 @@ export function TrendsScreen() {
     setWindowEndMs(maxMs || null)
     setWindowStartMs(days !== null && maxMs ? Math.max(minMs, maxMs - days * DAY_MS) : null)
   }, [activeTab])
+
+  // Apply pending filter from sidebar navigation or shared URL (mount only)
+  useEffect(() => {
+    const pending = (location.state as { pendingFilter?: FilterState } | null)?.pendingFilter
+    if (pending) { setFilterState(pending); return }
+    const encoded = searchParams.get('filter')
+    if (encoded) {
+      const decoded = decodeFilterState(encoded)
+      if (decoded) setFilterState(decoded)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Derive effective window (null → data extremes)
   const effectiveEndMs   = windowEndMs   ?? maxMs
@@ -332,6 +352,12 @@ export function TrendsScreen() {
         onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
         onTextChange={(key, val) => setFilterState(s => setTextFilter(s, key, val))}
         onClearAll={() => setFilterState(emptyFilterState())}
+        onSaveRequest={() => setSaveDialogOpen(true)}
+      />
+      <SaveViewDialog
+        open={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        onSave={async (name) => { await persistView({ name, view: '/trends', filterState }) }}
       />
 
       <div className="flex flex-col flex-1 overflow-hidden" dir="rtl">

@@ -32,21 +32,20 @@ function AppLayout() {
 }
 
 export const router = createHashRouter([
-  {
-    path: '/',
-    element: <Navigate to="/trends" replace />,
-  },
+  { path: '/', element: <Navigate to="/trends" replace /> },
+  // Public routes — no auth required, no AppLayout wrapper
+  { path: '/signin', element: <SignInScreen /> },
+  { path: '/sheets', element: <SheetPickerScreen /> },
+  // Protected routes — AppLayout redirects to /signin if not authenticated
   {
     path: '/',
     element: <AppLayout />,
     children: [
+      { path: 'trends', element: <TrendsScreen /> },
       { path: 'diary', element: <DiaryScreen /> },
       { path: 'diary/:date', element: <DailyDetailScreen /> },
       { path: 'soldier/:id', element: <SoldierScreen /> },
-      { path: 'trends', element: <TrendsScreen /> },
       { path: 'import', element: <ImportScreen /> },
-      { path: 'sheets', element: <SheetPickerScreen /> },
-      { path: 'signin', element: <SignInScreen /> },
       { path: '*', element: <Navigate to="/trends" replace /> },
     ],
   },

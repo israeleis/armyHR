@@ -34,9 +34,20 @@ export function useGoogleAuth() {
     const client = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly',
-      callback: (response) => {
+      callback: async (response) => {
         if (response.access_token) {
-          setToken(response.access_token)
+          // Fetch email from Google userinfo endpoint
+          let email: string | undefined
+          try {
+            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+              headers: { Authorization: `Bearer ${response.access_token}` },
+            })
+            if (res.ok) {
+              const info = await res.json() as { email?: string }
+              email = info.email
+            }
+          } catch { /* non-fatal — email stays undefined */ }
+          setToken(response.access_token, email)
         } else {
           console.error('GIS token error:', response.error)
         }

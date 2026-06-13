@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { useTheme } from '@/hooks/useTheme'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
 import { subscribeSyncState, type SyncState } from '@/data/syncEngine'
@@ -79,17 +79,18 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
     return () => { unsub(); window.removeEventListener('online', goOnline); window.removeEventListener('offline', goOffline) }
   }, [])
 
+  const isFetching = useIsFetching({ queryKey: ['diary'] }) > 0
+
   function handleSync() {
-    if (!isOnline) return
+    if (!isOnline || isFetching) return
     queryClient.invalidateQueries({ queryKey: ['diary'] })
   }
 
-  const offline   = !isOnline
-  const syncing   = sync.status === 'syncing'
-  const hasError  = sync.status === 'error'
-  const pending   = sync.pendingCount
+  const offline  = !isOnline
+  const hasError = sync.status === 'error'
+  const pending  = sync.pendingCount
+  const spinning = isFetching
 
-  // icon color
   const iconColor = offline ? '#f87171' : hasError ? '#f4d35e' : 'var(--color-on-surface-variant)'
 
   return (
@@ -118,12 +119,12 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
           {/* Sync button */}
           <button
             onClick={handleSync}
-            disabled={offline || syncing}
+            disabled={offline || isFetching}
             aria-label={offline ? 'לא מחובר' : 'רענן נתונים'}
             className="relative flex items-center justify-center w-[44px] h-[44px] disabled:cursor-not-allowed"
             style={{ color: iconColor }}
           >
-            <SyncIcon spinning={syncing} />
+            <SyncIcon spinning={spinning} />
             {pending > 0 && (
               <span
                 className="absolute top-1.5 right-1.5 min-w-[16px] h-4 rounded-full text-[9px] font-bold flex items-center justify-center px-0.5 leading-none"

@@ -208,3 +208,40 @@ export async function canEditSpreadsheet(token: string, spreadsheetId: string): 
     return true  // default to writable if check fails
   }
 }
+
+/** Create a sheet tab if it doesn't already exist. No-ops if already present. */
+export async function ensureTabExists(
+  token: string,
+  spreadsheetId: string,
+  tabName: string,
+): Promise<void> {
+  const tabs = await getSheetTabs(token, spreadsheetId)
+  if (tabs.includes(tabName)) return
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: tabName } } }] }),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    if (!text.includes('already exists')) throw new Error(`Sheets batchUpdate ${res.status}: ${text}`)
+  }
+}
+
+/** Append a single row of values to a sheet tab. */
+export async function appendRow(
+  token: string,
+  spreadsheetId: string,
+  tabName: string,
+  values: string[],
+): Promise<void> {
+  const range = sheetRange(tabName)
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ majorDimension: 'ROWS', values: [values] }),
+  })
+  if (!res.ok) throw new Error(`Sheets append ${res.status}: ${await res.text()}`)
+}

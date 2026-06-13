@@ -11,6 +11,7 @@ interface FilterPaneProps {
   onMultiClear: (key: string) => void
   onTextChange: (key: string, value: string) => void
   onClearAll: () => void
+  onSaveRequest?: () => void
 }
 
 function CloseIcon() {
@@ -140,7 +141,7 @@ function TextContent({ value, onChange }: { value: string; onChange: (v: string)
 
 export function FilterPane({
   open, onClose, sections, multiSelect, text,
-  onMultiToggle, onMultiClear, onTextChange, onClearAll,
+  onMultiToggle, onMultiClear, onTextChange, onClearAll, onSaveRequest,
 }: FilterPaneProps) {
   return (
     <>
@@ -197,6 +198,18 @@ export function FilterPane({
             }
           })}
         </div>
+
+        {/* Save view button */}
+        {onSaveRequest && (
+          <div className="shrink-0 px-4 py-3 border-t border-outline-variant">
+            <button
+              onClick={onSaveRequest}
+              className="w-full text-sm font-bold text-primary py-2 rounded-md hover:bg-surface-high transition-colors text-right"
+            >
+              + שמור תצוגה
+            </button>
+          </div>
+        )}
       </div>
     </>
   )

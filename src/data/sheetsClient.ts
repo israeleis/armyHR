@@ -106,44 +106,21 @@ export async function readCell(
   return ((data.values ?? [['']])[0]?.[0] ?? '') as string
 }
 
-/** Get the numeric sheetId for a tab by name (needed for batchUpdate cell notes) */
-export async function getSheetIdByName(
+/** Add a threaded comment to a Google Sheets file via the Drive API.
+ *  Shows the authenticated user as author — requires drive.file scope.
+ *  content should include the cell reference and change details. */
+export async function addDriveComment(
   token: string,
   spreadsheetId: string,
-  sheetName: string,
-): Promise<number | null> {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
-  if (!res.ok) return null
-  const data = await res.json() as { sheets?: Array<{ properties?: { title?: string; sheetId?: number } }> }
-  const sheet = data.sheets?.find(s => s.properties?.title === sheetName)
-  return sheet?.properties?.sheetId ?? null
-}
-
-/** Write a note (comment) to a single cell via batchUpdate */
-export async function updateCellNote(
-  token: string,
-  spreadsheetId: string,
-  sheetId: number,
-  row: number,
-  col: number,
-  note: string,
+  content: string,
 ): Promise<void> {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`
+  const url = `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/comments?fields=id`
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      requests: [{
-        updateCells: {
-          rows: [{ values: [{ note }] }],
-          fields: 'note',
-          range: { sheetId, startRowIndex: row, endRowIndex: row + 1, startColumnIndex: col, endColumnIndex: col + 1 },
-        },
-      }],
-    }),
+    body: JSON.stringify({ content }),
   })
-  if (!res.ok) throw new Error(`Sheets note update ${res.status}: ${await res.text()}`)
+  if (!res.ok) throw new Error(`Drive comments API ${res.status}: ${await res.text()}`)
 }
 
 // ── Sheet Picker: folder browse + search + paste ──────────────────────────

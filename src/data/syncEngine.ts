@@ -1,5 +1,5 @@
 import { markAttempted, removeWrite } from './writeQueue'
-import { updateCell, getSheetIdByName, updateCellNote } from './sheetsClient'
+import { updateCell, addDriveComment, toA1 } from './sheetsClient'
 import { db } from './db'
 import { getSnapshot } from './localCache'
 
@@ -137,15 +137,13 @@ export async function drainQueue(): Promise<void> {
           value: write.newValue,
         })
 
-        // Write cell note if supplied (non-fatal — don't retry on failure)
+        // Add Drive comment if supplied (non-fatal — don't retry on failure)
         if (write.note) {
           try {
-            const sheetId = await getSheetIdByName(token, write.spreadsheetId, write.sheetName)
-            if (sheetId !== null) {
-              await updateCellNote(token, write.spreadsheetId, sheetId, write.row, write.col, write.note)
-            }
+            const cellRef = `${write.sheetName}!${toA1(write.row, write.col)}`
+            await addDriveComment(token, write.spreadsheetId, `[${cellRef}]\n${write.note}`)
           } catch (noteErr) {
-            console.warn('Cell note write failed (non-fatal):', noteErr)
+            console.warn('Drive comment write failed (non-fatal):', noteErr)
           }
         }
 

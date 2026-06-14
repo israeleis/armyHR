@@ -151,24 +151,28 @@ export function TransitionsScreen() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
   }, [activeDateKey, effectiveDates])
 
-  const dateEntries = useMemo(
-    () => transitions.filter(e => e.dateKey === activeDateKey),
-    [transitions, activeDateKey]
-  )
-
-  const soldierFilteredEntries = useMemo(() => {
-    // Strip transitionType before passing to applySoldierFilter — it's not a soldier field
-    // and would cause all soldiers to be filtered out. It's handled in applyTransitionFilter.
+  // Apply all filters across all dates — used for carousel counts and active date display
+  const allFilteredTransitions = useMemo(() => {
     const { transitionType: _, ...restMulti } = filterState.multiSelect
     const soldierOnlyState = { ...filterState, multiSelect: restMulti }
-    const soldierFiltered = applySoldierFilter(dateEntries.map(e => e.soldier), soldierOnlyState)
+    const soldierFiltered = applySoldierFilter(transitions.map(e => e.soldier), soldierOnlyState)
     const soldierIds = new Set(soldierFiltered.map(s => s.id))
-    return dateEntries.filter(e => soldierIds.has(e.soldier.id))
-  }, [dateEntries, filterState])
+    return applyTransitionFilter(
+      transitions.filter(e => soldierIds.has(e.soldier.id)),
+      filterState
+    )
+  }, [transitions, filterState])
+
+  // Per-date count after filters (drives carousel dimming and badges)
+  const countByDate = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const e of allFilteredTransitions) map.set(e.dateKey, (map.get(e.dateKey) ?? 0) + 1)
+    return map
+  }, [allFilteredTransitions])
 
   const filteredEntries = useMemo(
-    () => applyTransitionFilter(soldierFilteredEntries, filterState),
-    [soldierFilteredEntries, filterState]
+    () => allFilteredTransitions.filter(e => e.dateKey === activeDateKey),
+    [allFilteredTransitions, activeDateKey]
   )
 
   const grouped = useMemo((): Array<{ key: string; entries: TransitionEntry[] }> => {
@@ -276,7 +280,7 @@ export function TransitionsScreen() {
                   const dk = toDateKey(date)
                   const active = dk === activeDateKey
                   const todayDate = isToday(date)
-                  const count = transitions.filter(e => e.dateKey === dk).length
+                  const count = countByDate.get(dk) ?? 0
                   return (
                     <button
                       key={dk}

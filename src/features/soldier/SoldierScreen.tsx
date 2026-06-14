@@ -5,6 +5,11 @@ import { he } from 'date-fns/locale'
 import { useDiaryData } from '@/features/diary/useDiaryData'
 import { getStatus } from '@/domain/statuses'
 import { StatusBadge } from '@/components/StatusBadge'
+import { StatusEditDialog } from './StatusEditDialog'
+import { useAuth } from '@/contexts/AuthContext'
+import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
+import { enqueueWrite } from '@/data/writeQueue'
+import { getSnapshot, saveSnapshot, applyWriteToSnapshot } from '@/data/localCache'
 import type { StatusEntry } from '@/domain/types'
 
 // ── Period calculation ─────────────────────────────────────────────────────
@@ -113,8 +118,47 @@ export function SoldierScreen() {
     [data, soldier]
   )
 
+  const { userEmail } = useAuth()
   const [sortAsc, setSortAsc]         = useState(false)
   const [expanded, setExpanded]       = useState<Set<number>>(new Set())
+  const [editingEntry, setEditingEntry] = useState<StatusEntry | null>(null)
+  const [localOverrides, setLocalOverrides] = useState<Map<string, string>>(new Map())
+
+  async function handleStatusSave(entry: StatusEntry, newCode: string, comment: string) {
+    const sheet = getSelectedSheet()
+    if (!sheet) return
+
+    const overrideKey = `${entry.sourceCell.row}-${entry.sourceCell.col}`
+    const oldCode = localOverrides.get(overrideKey) ?? entry.code
+
+    // Optimistic update
+    setLocalOverrides(prev => new Map(prev).set(overrideKey, newCode))
+    setEditingEntry(null)
+
+    // Update local cache snapshot
+    const snap = await getSnapshot(sheet.id, sheet.tabName)
+    if (snap) {
+      const updated = applyWriteToSnapshot(snap.rawValues, entry.sourceCell.row, entry.sourceCell.col, newCode)
+      await saveSnapshot(sheet.id, sheet.tabName, updated)
+    }
+
+    // Build cell note
+    const now = format(new Date(), 'dd/MM/yyyy HH:mm')
+    const who  = userEmail ?? 'משתמש'
+    const note = comment
+      ? `שונה על ידי ${who} ב-${now}\nהערה: ${comment}`
+      : `שונה על ידי ${who} ב-${now}`
+
+    await enqueueWrite({
+      spreadsheetId: sheet.id,
+      sheetName: sheet.tabName,
+      row: entry.sourceCell.row,
+      col: entry.sourceCell.col,
+      oldValue: oldCode,
+      newValue: newCode,
+      note,
+    })
+  }
 
   const periods = useMemo(() => {
     const p = calculatePeriods(entries)
@@ -148,6 +192,14 @@ export function SoldierScreen() {
   const fmtDays  = (n: number) => n === 1 ? 'יום אחד' : `${n} ימים`
 
   return (
+    <>
+    {editingEntry && (
+      <StatusEditDialog
+        currentCode={localOverrides.get(`${editingEntry.sourceCell.row}-${editingEntry.sourceCell.col}`) ?? editingEntry.code}
+        onSave={(newCode, comment) => handleStatusSave(editingEntry, newCode, comment)}
+        onClose={() => setEditingEntry(null)}
+      />
+    )}
     <div dir="rtl" className="flex flex-col h-screen overflow-hidden">
 
       {/* Header */}
@@ -303,13 +355,15 @@ export function SoldierScreen() {
                     {isOpen && (
                       <div className="border-t border-outline-variant divide-y divide-outline-variant/50">
                         {dayEntries.map(entry => {
-                          const statusDef = getStatus(entry.code)
+                          const overrideKey = `${entry.sourceCell.row}-${entry.sourceCell.col}`
+                          const displayCode = localOverrides.get(overrideKey) ?? entry.code
                           return (
-                            <div
+                            <button
                               key={entry.dateKey}
-                              className="flex items-center justify-between px-4 py-2"
+                              onClick={() => setEditingEntry(entry)}
+                              className="w-full flex items-center justify-between px-4 py-2 hover:bg-surface-bright transition-colors text-right"
                             >
-                              <StatusBadge code={entry.code} size="sm" />
+                              <StatusBadge code={displayCode} size="sm" />
                               <div className="text-right">
                                 <div className="text-xs font-mono text-on-surface">
                                   {format(entry.date, 'dd.MM.yy')}
@@ -318,7 +372,7 @@ export function SoldierScreen() {
                                   {format(entry.date, 'EEEE', { locale: he })}
                                 </div>
                               </div>
-                            </div>
+                            </button>
                           )
                         })}
                       </div>
@@ -332,5 +386,6 @@ export function SoldierScreen() {
         </div>
       )}
     </div>
+    </>
   )
 }

@@ -106,6 +106,46 @@ export async function readCell(
   return ((data.values ?? [['']])[0]?.[0] ?? '') as string
 }
 
+/** Get the numeric sheetId for a tab by name (needed for batchUpdate cell notes) */
+export async function getSheetIdByName(
+  token: string,
+  spreadsheetId: string,
+  sheetName: string,
+): Promise<number | null> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) return null
+  const data = await res.json() as { sheets?: Array<{ properties?: { title?: string; sheetId?: number } }> }
+  const sheet = data.sheets?.find(s => s.properties?.title === sheetName)
+  return sheet?.properties?.sheetId ?? null
+}
+
+/** Write a note (comment) to a single cell via batchUpdate */
+export async function updateCellNote(
+  token: string,
+  spreadsheetId: string,
+  sheetId: number,
+  row: number,
+  col: number,
+  note: string,
+): Promise<void> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{
+        updateCells: {
+          rows: [{ values: [{ note }] }],
+          fields: 'note',
+          range: { sheetId, startRowIndex: row, endRowIndex: row + 1, startColumnIndex: col, endColumnIndex: col + 1 },
+        },
+      }],
+    }),
+  })
+  if (!res.ok) throw new Error(`Sheets note update ${res.status}: ${await res.text()}`)
+}
+
 // ── Sheet Picker: folder browse + search + paste ──────────────────────────
 
 export interface FolderItem { id: string; name: string }

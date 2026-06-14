@@ -128,7 +128,7 @@ export function TransitionsScreen() {
 
   const effectiveDates = dates.length > 0
     ? dates
-    : Array.from({ length: 14 }, (_, i) => addDays(today, i - 7))
+    : Array.from({ length: 15 }, (_, i) => addDays(today, i - 7))
 
   const activeDate = useMemo(() => {
     if (selectedDateKey) {

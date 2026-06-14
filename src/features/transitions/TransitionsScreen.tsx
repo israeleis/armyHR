@@ -327,6 +327,16 @@ export function TransitionsScreen() {
   const hasGroupBy   = groupByKeys.length > 0
   const available    = GROUP_BY_OPTIONS.filter(o => !groupByKeys.includes(o.key))
 
+  const allHeaderPaths = useMemo(
+    () => flatItems.filter(i => i.type === 'header').map(i => (i as { path: string }).path),
+    [flatItems]
+  )
+  const isAllExpanded = hasGroupBy && allHeaderPaths.length > 0 && allHeaderPaths.every(p => expanded.has(p))
+
+  function toggleAllExpanded() {
+    setExpanded(isAllExpanded ? new Set() : new Set(allHeaderPaths))
+  }
+
   return (
     <>
       <FilterPane
@@ -475,9 +485,25 @@ export function TransitionsScreen() {
             {/* ─── Transitions for active date ─── */}
             <div className="px-4 pb-4">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-mono text-on-surface-variant">
-                  {filteredEntries.length > 0 ? `${filteredEntries.length} פעולות` : ''}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-on-surface-variant">
+                    {filteredEntries.length > 0 ? `${filteredEntries.length} פעולות` : ''}
+                  </span>
+                  {hasGroupBy && filteredEntries.length > 0 && (
+                    <button
+                      onClick={toggleAllExpanded}
+                      className="flex items-center justify-center w-6 h-6 rounded text-on-surface-variant hover:text-on-surface transition-colors"
+                      aria-label={isAllExpanded ? 'כווץ הכל' : 'פתח הכל'}
+                      title={isAllExpanded ? 'כווץ הכל' : 'פתח הכל'}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        {isAllExpanded
+                          ? <><polyline points="18 15 12 9 6 15"/><polyline points="18 19 12 13 6 19"/></>
+                          : <><polyline points="18 9 12 15 6 9"/><polyline points="18 5 12 11 6 5"/></>}
+                      </svg>
+                    </button>
+                  )}
+                </div>
                 <span className="text-sm font-bold text-on-surface">
                   {format(activeDate, 'EEEE, d בMMMM', { locale: he })}
                 </span>

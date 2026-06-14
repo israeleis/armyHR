@@ -288,7 +288,9 @@ export function TransitionsScreen() {
                           ? 'w-[80px] h-[80px] bg-primary-container border border-primary/60'
                           : todayDate
                             ? 'w-[60px] h-[68px] bg-surface-high border border-primary/40'
-                            : 'w-[60px] h-[68px] bg-surface-high border border-transparent'}`}
+                            : count === 0
+                              ? 'w-[60px] h-[68px] opacity-35 border border-transparent'
+                              : 'w-[60px] h-[68px] bg-surface-high border border-transparent'}`}
                     >
                       <span className={`text-[10px] font-mono uppercase mb-0.5 ${active ? 'text-on-primary-container' : 'text-on-surface-variant'}`}>
                         {format(date, 'EEE', { locale: he })}

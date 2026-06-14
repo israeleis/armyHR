@@ -125,39 +125,43 @@ export function SoldierScreen() {
   const [localOverrides, setLocalOverrides] = useState<Map<string, string>>(new Map())
 
   async function handleStatusSave(entry: StatusEntry, newCode: string, comment: string) {
-    const sheet = getSelectedSheet()
-    if (!sheet) return
-
     const overrideKey = `${entry.sourceCell.row}-${entry.sourceCell.col}`
     const oldCode = localOverrides.get(overrideKey) ?? entry.code
 
-    // Optimistic update
+    // Always update UI immediately — before any async work or early returns
     setLocalOverrides(prev => new Map(prev).set(overrideKey, newCode))
     setEditingEntry(null)
 
-    // Update local cache snapshot
-    const snap = await getSnapshot(sheet.id, sheet.tabName)
-    if (snap) {
-      const updated = applyWriteToSnapshot(snap.rawValues, entry.sourceCell.row, entry.sourceCell.col, newCode)
-      await saveSnapshot(sheet.id, sheet.tabName, updated)
+    const sheet = getSelectedSheet()
+    if (!sheet) return
+
+    try {
+      // Update local cache snapshot for conflict detection
+      const snap = await getSnapshot(sheet.id, sheet.tabName)
+      if (snap) {
+        const updated = applyWriteToSnapshot(snap.rawValues, entry.sourceCell.row, entry.sourceCell.col, newCode)
+        await saveSnapshot(sheet.id, sheet.tabName, updated)
+      }
+
+      // Build cell note
+      const now  = format(new Date(), 'dd/MM/yyyy HH:mm')
+      const who  = userEmail ?? 'משתמש'
+      const note = comment
+        ? `שונה על ידי ${who} ב-${now}\nהערה: ${comment}`
+        : `שונה על ידי ${who} ב-${now}`
+
+      await enqueueWrite({
+        spreadsheetId: sheet.id,
+        sheetName: sheet.tabName,
+        row: entry.sourceCell.row,
+        col: entry.sourceCell.col,
+        oldValue: oldCode,
+        newValue: newCode,
+        note,
+      })
+    } catch (err) {
+      console.error('Failed to queue status write:', err)
     }
-
-    // Build cell note
-    const now = format(new Date(), 'dd/MM/yyyy HH:mm')
-    const who  = userEmail ?? 'משתמש'
-    const note = comment
-      ? `שונה על ידי ${who} ב-${now}\nהערה: ${comment}`
-      : `שונה על ידי ${who} ב-${now}`
-
-    await enqueueWrite({
-      spreadsheetId: sheet.id,
-      sheetName: sheet.tabName,
-      row: entry.sourceCell.row,
-      col: entry.sourceCell.col,
-      oldValue: oldCode,
-      newValue: newCode,
-      note,
-    })
   }
 
   const periods = useMemo(() => {

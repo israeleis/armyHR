@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { he } from 'date-fns/locale'
@@ -15,6 +15,7 @@ import {
   type FilterState,
 } from '@/features/filters'
 import { useSavedViews } from '@/hooks/useSavedViews'
+import { setActiveView, clearActiveView } from '@/contexts/ActiveViewContext'
 import { enqueueWrite } from '@/data/writeQueue'
 import { getSnapshot, saveSnapshot, applyWriteToSnapshot } from '@/data/localCache'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
@@ -138,6 +139,7 @@ export function DailyDetailScreen() {
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const { saveView: persistView } = useSavedViews()
+  const viewBaseRef = useRef<FilterState | null>(null)
 
   const sheet = getSelectedSheet()
 
@@ -212,10 +214,28 @@ export function DailyDetailScreen() {
     return { unknownCodeSoldiers: unknown, noStatusSoldiers: absent }
   }, [visibleSoldiers, entryBySoldierId])
 
-  // Apply pending filter from sidebar navigation or shared URL (mount only)
+  // Apply pending filter from sidebar navigation (also fires when re-navigating to same route)
   useEffect(() => {
-    const pending = (location.state as { pendingFilter?: FilterState } | null)?.pendingFilter
-    if (pending) { setFilterState(pending); return }
+    const state = location.state as { pendingFilter?: FilterState; viewName?: string } | null
+    const pending = state?.pendingFilter
+    if (!pending) return
+    viewBaseRef.current = pending
+    setFilterState(pending)
+    setActiveView(state?.viewName ?? null)
+    navigate(location.pathname, { replace: true, state: null })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
+
+  // Deselect active view when filter diverges from the saved base
+  useEffect(() => {
+    if (!viewBaseRef.current || filterState === viewBaseRef.current) return
+    viewBaseRef.current = null
+    clearActiveView()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterState])
+
+  // Apply filter from shared URL param on mount only
+  useEffect(() => {
     const encoded = searchParams.get('filter')
     if (encoded) {
       const decoded = decodeFilterState(encoded)
@@ -266,7 +286,7 @@ export function DailyDetailScreen() {
       onMultiToggle={(key, val) => setFilterState(s => toggleMultiSelect(s, key, val))}
       onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
       onTextChange={(key, val) => setFilterState(s => setTextFilter(s, key, val))}
-      onClearAll={() => setFilterState(emptyFilterState())}
+      onClearAll={() => { setFilterState(emptyFilterState()); viewBaseRef.current = null; clearActiveView() }}
       onSaveRequest={() => setSaveDialogOpen(true)}
     />
     <SaveViewDialog

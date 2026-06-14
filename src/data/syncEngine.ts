@@ -1,5 +1,5 @@
 import { markAttempted, removeWrite } from './writeQueue'
-import { updateCell } from './sheetsClient'
+import { updateCell, setCellNote } from './sheetsClient'
 import { db } from './db'
 import { getSnapshot } from './localCache'
 
@@ -54,6 +54,12 @@ export function initSyncEngine(getToken: () => string | null) {
     window.removeEventListener('focus', runSync)
     if (syncInterval !== null) clearInterval(syncInterval)
   }
+}
+
+/** Call after enqueueWrite so the header badge reflects the new count immediately */
+export async function refreshPendingCount(): Promise<void> {
+  const count = await db.writeQueue.count()
+  emit({ pendingCount: count })
 }
 
 export async function drainQueue(): Promise<void> {
@@ -130,6 +136,15 @@ export async function drainQueue(): Promise<void> {
           col: write.col,
           value: write.newValue,
         })
+
+        // Write cell note if supplied — creates triangle chip on the cell (non-fatal)
+        if (write.note) {
+          try {
+            await setCellNote(token, write.spreadsheetId, write.sheetName, write.row, write.col, write.note)
+          } catch (noteErr) {
+            console.warn('Cell note write failed (non-fatal):', noteErr)
+          }
+        }
 
         await removeWrite(write.id!)
       } catch (err) {

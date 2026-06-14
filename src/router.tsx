@@ -4,12 +4,15 @@ import { AppHeader } from '@/components/AppHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { useAuth } from '@/contexts/AuthContext'
 import { useGoogleAuth } from '@/features/auth/useGoogleAuth'
+import { ActiveViewProvider } from '@/contexts/ActiveViewContext'
+import { initSyncEngine } from '@/data/syncEngine'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
 import { DiaryScreen } from '@/features/diary/DiaryScreen'
 import { DailyDetailScreen } from '@/features/daily/DailyDetailScreen'
 import { SoldierScreen } from '@/features/soldier/SoldierScreen'
 import { TrendsScreen } from '@/features/trends/TrendsScreen'
+import { SoldiersScreen } from '@/features/soldiers/SoldiersScreen'
 import { ImportScreen } from '@/features/import/ImportScreen'
 
 function useIsOnline() {
@@ -25,7 +28,7 @@ function useIsOnline() {
 }
 
 function AppLayout() {
-  const { isSignedIn, userEmail } = useAuth()
+  const { isSignedIn, token, userEmail } = useAuth()
   const { silentRefresh } = useGoogleAuth()
   const isOnline = useIsOnline()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -52,19 +55,28 @@ function AppLayout() {
     )
   }
 
+  // Start sync engine once — provides a stable token getter so it always uses the latest token
+  const tokenRef = { current: token }
+  tokenRef.current = token
+  useEffect(() => {
+    return initSyncEngine(() => tokenRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   if (isOnline && !isSignedIn) return <Navigate to="/signin" replace />
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <AppHeader
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen(o => !o)}
-      />
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <Outlet />
+    <ActiveViewProvider>
+      <div className="flex flex-col min-h-screen bg-background">
+        <AppHeader
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(o => !o)}
+        />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 flex flex-col">
+          <Outlet />
+        </div>
       </div>
-    </div>
+    </ActiveViewProvider>
   )
 }
 
@@ -77,6 +89,7 @@ export const router = createHashRouter([
     element: <AppLayout />,
     children: [
       { path: 'trends', element: <TrendsScreen /> },
+      { path: 'soldiers', element: <SoldiersScreen /> },
       { path: 'diary', element: <DiaryScreen /> },
       { path: 'diary/:date', element: <DailyDetailScreen /> },
       { path: 'soldier/:id', element: <SoldierScreen /> },

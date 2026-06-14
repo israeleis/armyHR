@@ -24,7 +24,7 @@ declare global {
   }
 }
 
-const SCOPE = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly'
+const SCOPE = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive'
 const DEFAULT_EXPIRES_IN = 3600 // 1 hour fallback
 
 async function fetchEmail(accessToken: string): Promise<string | undefined> {

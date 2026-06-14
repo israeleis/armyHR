@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
+import { he } from 'date-fns/locale'
 import { useDiaryData } from '@/features/diary/useDiaryData'
 import { getStatus } from '@/domain/statuses'
+import { StatusBadge } from '@/components/StatusBadge'
 import type { StatusEntry } from '@/domain/types'
 
 // ── Period calculation ─────────────────────────────────────────────────────
@@ -14,6 +16,7 @@ interface Period {
   startDate: Date
   endDate: Date
   days: number
+  entries: StatusEntry[]
 }
 
 const PERIOD_META: Record<PeriodCategory, { label: string; color: string }> = {
@@ -24,13 +27,10 @@ const PERIOD_META: Record<PeriodCategory, { label: string; color: string }> = {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-// ל = closing reserve service; פ = opening reserve service
-// After ל, the soldier is released — subsequent paid-home entries become משוחרר
-// until the next reserve cycle opens (פ or any in-army code).
 function categorize(code: string, released: boolean): PeriodCategory {
   const def = getStatus(code)
-  if (def?.inArmy) return 'army'          // army codes always mean army
-  if (released) return 'home-free'        // post-ל: everything is released
+  if (def?.inArmy) return 'army'
+  if (released) return 'home-free'
   if (!def || !def.isPaid) return 'home-free'
   return 'home-paid'
 }
@@ -45,39 +45,39 @@ function calculatePeriods(entries: StatusEntry[]): Period[] {
   if (sorted.length === 0) return []
 
   const periods: Period[] = []
-  let released = false   // true after ל, until next army/פ entry
+  let released = false
 
-  let start = sorted[0].date
-  let cat   = categorize(sorted[0].code, released)
-  let prev  = sorted[0].date
+  let start        = sorted[0].date
+  let cat          = categorize(sorted[0].code, released)
+  let prev         = sorted[0].date
+  let periodEntries: StatusEntry[] = [sorted[0]]
 
-  // Update release state after processing the first entry
   if (sorted[0].code === 'ל') released = true
 
   for (let i = 1; i < sorted.length; i++) {
     const entry = sorted[i]
     const gap   = Math.round((entry.date.getTime() - prev.getTime()) / DAY_MS)
 
-    // A new reserve cycle resets the released flag
     if (entry.code === 'פ' || getStatus(entry.code)?.inArmy) released = false
 
     const entryCat = categorize(entry.code, released)
 
-    // Break on category change OR date gap larger than 1 day
     if (entryCat !== cat || gap > 1) {
       periods.push({
         category: cat,
         startDate: start,
         endDate: prev,
         days: Math.round((prev.getTime() - start.getTime()) / DAY_MS) + 1,
+        entries: periodEntries,
       })
       start = entry.date
       cat   = entryCat
+      periodEntries = []
     }
 
+    periodEntries.push(entry)
     prev = entry.date
 
-    // Mark release after processing the ל entry itself (ל day stays in its own period)
     if (entry.code === 'ל') released = true
   }
 
@@ -86,6 +86,7 @@ function calculatePeriods(entries: StatusEntry[]): Period[] {
     startDate: start,
     endDate: prev,
     days: Math.round((prev.getTime() - start.getTime()) / DAY_MS) + 1,
+    entries: periodEntries,
   })
 
   return periods.reverse()
@@ -108,11 +109,27 @@ export function SoldierScreen() {
     [data, soldier]
   )
 
-  const [sortAsc, setSortAsc] = useState(false)
+  const [sortAsc, setSortAsc]         = useState(false)
+  const [expanded, setExpanded]       = useState<Set<number>>(new Set())
+
   const periods = useMemo(() => {
-    const p = calculatePeriods(entries) // always returns desc
+    const p = calculatePeriods(entries)
     return sortAsc ? [...p].reverse() : p
   }, [entries, sortAsc])
+
+  const allExpanded = periods.length > 0 && expanded.size === periods.length
+
+  function togglePeriod(idx: number) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(idx) ? next.delete(idx) : next.add(idx)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setExpanded(allExpanded ? new Set() : new Set(periods.map((_, i) => i)))
+  }
 
   const stats = useMemo(() => {
     const armyDays  = periods.filter(p => p.category === 'army').reduce((s, p) => s + p.days, 0)
@@ -129,10 +146,7 @@ export function SoldierScreen() {
 
       {/* Header */}
       <header className="sticky top-0 z-10 bg-surface-container border-b border-outline-variant px-4 py-3">
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1 text-sm text-primary mb-1"
-        >
+        <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-primary mb-1">
           ‹ חזרה
         </button>
         <h1 className="text-lg font-bold text-on-surface">
@@ -146,11 +160,8 @@ export function SoldierScreen() {
       </header>
 
       {isLoading && (
-        <div className="flex-1 flex items-center justify-center text-on-surface-variant font-mono text-sm">
-          טוען...
-        </div>
+        <div className="flex-1 flex items-center justify-center text-on-surface-variant font-mono text-sm">טוען...</div>
       )}
-
       {!soldier && !isLoading && (
         <div className="m-4 text-on-surface-variant text-sm text-center py-8">חייל לא נמצא</div>
       )}
@@ -201,16 +212,34 @@ export function SoldierScreen() {
               <h2 className="text-[11px] font-mono font-bold text-primary uppercase tracking-wider">
                 תקופות שירות
               </h2>
-              <button
-                onClick={() => setSortAsc(a => !a)}
-                className="flex items-center gap-1 text-[11px] font-mono text-on-surface-variant hover:text-on-surface transition-colors"
-              >
-                {sortAsc ? 'ישן → חדש' : 'חדש → ישן'}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                  style={{ transform: sortAsc ? 'scaleY(-1)' : 'none' }}>
-                  <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
-                </svg>
-              </button>
+              <div className="flex items-center gap-3">
+                {/* Expand / collapse all */}
+                {periods.length > 0 && (
+                  <button
+                    onClick={toggleAll}
+                    className="text-on-surface-variant hover:text-on-surface transition-colors"
+                    title={allExpanded ? 'כווץ הכל' : 'הרחב הכל'}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      {allExpanded
+                        ? <><polyline points="4 14 10 8 16 14"/><polyline points="4 20 10 14 16 20"/></>
+                        : <><polyline points="4 4 10 10 16 4"/><polyline points="4 10 10 16 16 10"/></>
+                      }
+                    </svg>
+                  </button>
+                )}
+                {/* Sort direction */}
+                <button
+                  onClick={() => setSortAsc(a => !a)}
+                  className="flex items-center gap-1 text-[11px] font-mono text-on-surface-variant hover:text-on-surface transition-colors"
+                >
+                  {sortAsc ? 'ישן → חדש' : 'חדש → ישן'}
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                    style={{ transform: sortAsc ? 'scaleY(-1)' : 'none' }}>
+                    <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                  </svg>
+                </button>
+              </div>
             </div>
 
             {periods.length === 0 && (
@@ -219,35 +248,71 @@ export function SoldierScreen() {
 
             <div className="space-y-1.5">
               {periods.map((period, idx) => {
-                const meta = PERIOD_META[period.category]
-                const sameDay = period.startDate.getTime() === period.endDate.getTime()
+                const meta      = PERIOD_META[period.category]
+                const sameDay   = period.startDate.getTime() === period.endDate.getTime()
+                const isOpen    = expanded.has(idx)
+                const dayEntries = sortAsc
+                  ? [...period.entries].sort((a, b) => a.date.getTime() - b.date.getTime())
+                  : [...period.entries].sort((a, b) => b.date.getTime() - a.date.getTime())
+
                 return (
-                  <div
-                    key={idx}
-                    className="flex items-center bg-surface-high border border-outline-variant rounded-lg overflow-hidden"
-                  >
-                    {/* Color bar */}
-                    <div className="w-1 self-stretch shrink-0" style={{ backgroundColor: meta.color }} />
+                  <div key={idx} className="bg-surface-high border border-outline-variant rounded-lg overflow-hidden">
+                    {/* Period row — clickable */}
+                    <button
+                      onClick={() => togglePeriod(idx)}
+                      className="w-full flex items-center text-right"
+                    >
+                      {/* Color bar */}
+                      <div className="w-1 self-stretch shrink-0" style={{ backgroundColor: meta.color }} />
 
-                    {/* Content */}
-                    <div className="flex items-center gap-3 flex-1 px-3 py-2.5">
-                      {/* Label */}
-                      <span className="text-sm font-bold shrink-0" style={{ color: meta.color }}>
-                        {meta.label}
-                      </span>
+                      {/* Content */}
+                      <div className="flex items-center gap-3 flex-1 px-3 py-2.5">
+                        <span className="text-sm font-bold shrink-0" style={{ color: meta.color }}>
+                          {meta.label}
+                        </span>
+                        <span className="text-xs font-mono text-on-surface-variant flex-1 text-left" dir="ltr">
+                          {sameDay
+                            ? fmtDate(period.startDate)
+                            : `${fmtDate(period.startDate)} – ${fmtDate(period.endDate)}`}
+                        </span>
+                        <span className="text-xs font-mono font-bold text-on-surface shrink-0">
+                          {period.days} י׳
+                        </span>
+                        <svg
+                          width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                          strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                          className="text-on-surface-variant shrink-0 transition-transform duration-150"
+                          style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                        >
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
+                      </div>
+                    </button>
 
-                      {/* Date range */}
-                      <span className="text-xs font-mono text-on-surface-variant flex-1 text-left" dir="ltr">
-                        {sameDay
-                          ? fmtDate(period.startDate)
-                          : `${fmtDate(period.startDate)} – ${fmtDate(period.endDate)}`}
-                      </span>
-
-                      {/* Days count */}
-                      <span className="text-xs font-mono font-bold text-on-surface shrink-0">
-                        {period.days} י׳
-                      </span>
-                    </div>
+                    {/* Expanded day entries */}
+                    {isOpen && (
+                      <div className="border-t border-outline-variant divide-y divide-outline-variant/50">
+                        {dayEntries.map(entry => {
+                          const statusDef = getStatus(entry.code)
+                          return (
+                            <div
+                              key={entry.dateKey}
+                              className="flex items-center justify-between px-4 py-2"
+                            >
+                              <StatusBadge code={entry.code} size="sm" />
+                              <div className="text-right">
+                                <div className="text-xs font-mono text-on-surface">
+                                  {format(entry.date, 'dd.MM.yy')}
+                                </div>
+                                <div className="text-[10px] text-on-surface-variant">
+                                  {format(entry.date, 'EEEE', { locale: he })}
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
                 )
               })}

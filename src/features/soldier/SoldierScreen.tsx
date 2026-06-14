@@ -28,11 +28,12 @@ const PERIOD_META: Record<PeriodCategory, { label: string; color: string }> = {
 const DAY_MS = 24 * 60 * 60 * 1000
 
 function categorize(code: string, released: boolean): PeriodCategory {
-  const def = getStatus(code)
-  if (def?.inArmy) return 'army'
   if (released) return 'home-free'
-  if (!def || !def.isPaid) return 'home-free'
-  return 'home-paid'
+  const def = getStatus(code)
+  // ג (גימלים) = sick at home, paid — not physically at base
+  if (def?.inArmy && code !== 'ג') return 'army'
+  if (def?.isPaid) return 'home-paid'
+  return 'home-free'
 }
 
 function calculatePeriods(entries: StatusEntry[]): Period[] {

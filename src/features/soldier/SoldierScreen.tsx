@@ -139,7 +139,8 @@ export function SoldierScreen() {
     return { armyDays, homeDays, totalDays, pct }
   }, [periods])
 
-  const fmtDate = (d: Date) => format(d, 'dd.MM.yy')
+  const fmtDate  = (d: Date) => format(d, 'dd.MM.yy')
+  const fmtDays  = (n: number) => n === 1 ? 'יום אחד' : `${n} ימים`
 
   return (
     <div dir="rtl" className="flex flex-col h-screen overflow-hidden">
@@ -276,7 +277,7 @@ export function SoldierScreen() {
                             : `${fmtDate(period.startDate)} – ${fmtDate(period.endDate)}`}
                         </span>
                         <span className="text-xs font-mono font-bold text-on-surface shrink-0">
-                          {period.days} י׳
+                          {fmtDays(period.days)}
                         </span>
                         <svg
                           width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"

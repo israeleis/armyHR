@@ -207,7 +207,7 @@ export function SoldierScreen() {
               </div>
               <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold" style={{ color: '#f4d35e' }}>{stats.homePaidDays}</div>
-                <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">בית</div>
+                <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">בית בתשלום</div>
               </div>
               <div className="bg-primary-container rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-on-primary-container">{stats.pct}%</div>

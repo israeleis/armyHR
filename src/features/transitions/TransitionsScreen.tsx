@@ -159,7 +159,11 @@ export function TransitionsScreen() {
   )
 
   const soldierFilteredEntries = useMemo(() => {
-    const soldierFiltered = applySoldierFilter(dateEntries.map(e => e.soldier), filterState)
+    // Strip transitionType before passing to applySoldierFilter — it's not a soldier field
+    // and would cause all soldiers to be filtered out. It's handled in applyTransitionFilter.
+    const { transitionType: _, ...restMulti } = filterState.multiSelect
+    const soldierOnlyState = { ...filterState, multiSelect: restMulti }
+    const soldierFiltered = applySoldierFilter(dateEntries.map(e => e.soldier), soldierOnlyState)
     const soldierIds = new Set(soldierFiltered.map(s => s.id))
     return dateEntries.filter(e => soldierIds.has(e.soldier.id))
   }, [dateEntries, filterState])

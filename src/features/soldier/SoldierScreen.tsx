@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { format } from 'date-fns'
 import { useDiaryData } from '@/features/diary/useDiaryData'
@@ -108,7 +108,11 @@ export function SoldierScreen() {
     [data, soldier]
   )
 
-  const periods = useMemo(() => calculatePeriods(entries), [entries])
+  const [sortAsc, setSortAsc] = useState(false)
+  const periods = useMemo(() => {
+    const p = calculatePeriods(entries) // always returns desc
+    return sortAsc ? [...p].reverse() : p
+  }, [entries, sortAsc])
 
   const stats = useMemo(() => {
     const armyDays  = periods.filter(p => p.category === 'army').reduce((s, p) => s + p.days, 0)
@@ -193,9 +197,21 @@ export function SoldierScreen() {
 
           {/* Periods list */}
           <div>
-            <h2 className="text-[11px] font-mono font-bold text-primary uppercase tracking-wider mb-2">
-              תקופות שירות
-            </h2>
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-[11px] font-mono font-bold text-primary uppercase tracking-wider">
+                תקופות שירות
+              </h2>
+              <button
+                onClick={() => setSortAsc(a => !a)}
+                className="flex items-center gap-1 text-[11px] font-mono text-on-surface-variant hover:text-on-surface transition-colors"
+              >
+                {sortAsc ? 'ישן → חדש' : 'חדש → ישן'}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                  style={{ transform: sortAsc ? 'scaleY(-1)' : 'none' }}>
+                  <line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/>
+                </svg>
+              </button>
+            </div>
 
             {periods.length === 0 && (
               <p className="text-sm text-outline text-center py-6 font-mono">אין היסטוריה</p>

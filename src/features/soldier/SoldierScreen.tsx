@@ -19,7 +19,7 @@ interface Period {
 const PERIOD_META: Record<PeriodCategory, { label: string; color: string }> = {
   'army':      { label: 'בסיס',       color: '#c3cc8c' },
   'home-paid': { label: 'בית בתשלום', color: '#f4d35e' },
-  'home-free': { label: 'בית חופשי',  color: '#f87171' },
+  'home-free': { label: 'משוחרר',     color: '#f87171' },
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000

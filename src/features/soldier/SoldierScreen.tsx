@@ -276,7 +276,7 @@ export function SoldierScreen() {
                             ? fmtDate(period.startDate)
                             : `${fmtDate(period.startDate)} – ${fmtDate(period.endDate)}`}
                         </span>
-                        <span className="text-xs font-mono font-bold text-on-surface shrink-0">
+                        <span className="text-xs font-mono font-bold shrink-0" style={{ color: meta.color }}>
                           {fmtDays(period.days)}
                         </span>
                         <svg

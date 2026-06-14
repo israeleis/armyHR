@@ -95,11 +95,9 @@ function EntryRow({ entry }: { entry: TransitionEntry }) {
         <div className="text-sm font-bold text-on-surface truncate">
           {[soldier.rank, soldier.name].filter(Boolean).join(' ')}
         </div>
-        {(soldier.unit || soldier.team) && (
-          <div className="text-[10px] font-mono text-on-surface-variant">
-            {[soldier.unit, soldier.team].filter(Boolean).join(' · ')}
-          </div>
-        )}
+        <div className="text-[10px] font-mono text-on-surface-variant">
+          {[soldier.id, soldier.unit, soldier.team].filter(Boolean).join(' · ')}
+        </div>
       </div>
       <div className="flex flex-col items-end gap-1 shrink-0">
         <div className="flex gap-1">

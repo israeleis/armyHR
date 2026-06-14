@@ -14,6 +14,7 @@ import { SoldierScreen } from '@/features/soldier/SoldierScreen'
 import { TrendsScreen } from '@/features/trends/TrendsScreen'
 import { SoldiersScreen } from '@/features/soldiers/SoldiersScreen'
 import { ImportScreen } from '@/features/import/ImportScreen'
+import { TransitionsScreen } from '@/features/transitions/TransitionsScreen'
 
 function useIsOnline() {
   const [online, setOnline] = useState(navigator.onLine)
@@ -91,6 +92,7 @@ export const router = createHashRouter([
     children: [
       { path: 'trends', element: <TrendsScreen /> },
       { path: 'soldiers', element: <SoldiersScreen /> },
+      { path: 'transitions', element: <TransitionsScreen /> },
       { path: 'diary', element: <DiaryScreen /> },
       { path: 'diary/:date', element: <DailyDetailScreen /> },
       { path: 'soldier/:id', element: <SoldierScreen /> },

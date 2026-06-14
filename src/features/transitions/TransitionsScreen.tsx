@@ -4,9 +4,9 @@ import { format, startOfToday, isToday, addDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useTransitions } from './useTransitions'
 import { getStatus } from '@/domain/statuses'
-import { FilterPane } from '@/components/FilterPane'
+import { FilterPane, CollapsibleSection } from '@/components/FilterPane'
 import {
-  emptyFilterState, activeFilterCount,
+  emptyFilterState, isFilterActive, activeFilterCount,
   buildFilterSections, applySoldierFilter,
   toggleMultiSelect, clearMultiKey, setTextFilter,
   type FilterState, type FilterSection,
@@ -26,10 +26,9 @@ const TRANSITION_TYPE_SECTION: FilterSection = {
   options: ['פתיחה', 'סגירה'],
 }
 
-type GroupByKey = 'none' | 'transitionType' | 'unit' | 'team' | 'role' | 'rank'
+type GroupByKey = 'transitionType' | 'unit' | 'team' | 'role' | 'rank'
 
 const GROUP_BY_OPTIONS: Array<{ key: GroupByKey; label: string }> = [
-  { key: 'none',           label: 'ללא'    },
   { key: 'transitionType', label: 'סוג'    },
   { key: 'unit',           label: 'יחידה'  },
   { key: 'team',           label: 'כיתה'   },
@@ -44,12 +43,11 @@ function getGroupLabel(entry: TransitionEntry, key: GroupByKey): string {
     case 'team':  return entry.soldier.team  || 'ללא כיתה'
     case 'role':  return entry.soldier.role  || 'ללא תפקיד'
     case 'rank':  return entry.soldier.rank  || 'ללא דרגה'
-    default:      return ''
   }
 }
 
 // Expand entries so those with both types appear in each transitionType group.
-function expandForGroupBy(entries: TransitionEntry[], groupBy: GroupByKey): TransitionEntry[] {
+function expandForGroupBy(entries: TransitionEntry[], groupBy: GroupByKey | null): TransitionEntry[] {
   if (groupBy !== 'transitionType') return entries
   const expanded: TransitionEntry[] = []
   for (const e of entries) {
@@ -71,6 +69,16 @@ function applyTransitionFilter(entries: TransitionEntry[], filterState: FilterSt
   })
 }
 
+function FilterIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+      stroke={active ? 'var(--color-primary)' : 'currentColor'}
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+    </svg>
+  )
+}
+
 // ── Entry row ──────────────────────────────────────────────────────────────
 
 function EntryRow({ entry }: { entry: TransitionEntry }) {
@@ -80,11 +88,9 @@ function EntryRow({ entry }: { entry: TransitionEntry }) {
 
   return (
     <div className="flex flex-row-reverse items-center gap-3 bg-surface-high border border-outline-variant rounded-md px-3 py-2.5">
-      {/* Avatar */}
       <div className="shrink-0 w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-xs font-bold text-on-primary-container">
         {initials}
       </div>
-      {/* Name / secondary */}
       <div className="flex-1 text-right min-w-0">
         <div className="text-sm font-bold text-on-surface truncate">
           {[soldier.rank, soldier.name].filter(Boolean).join(' ')}
@@ -95,7 +101,6 @@ function EntryRow({ entry }: { entry: TransitionEntry }) {
           </div>
         )}
       </div>
-      {/* Type chips + status */}
       <div className="flex flex-col items-end gap-1 shrink-0">
         <div className="flex gap-1">
           {types.includes('פתיחה') && (
@@ -122,7 +127,7 @@ export function TransitionsScreen() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
   const [filterOpen, setFilterOpen] = useState(false)
-  const [groupBy, setGroupBy] = useState<GroupByKey>('none')
+  const [groupBy, setGroupBy] = useState<GroupByKey | null>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
   const today = startOfToday()
 
@@ -140,7 +145,6 @@ export function TransitionsScreen() {
 
   const activeDateKey = toDateKey(activeDate)
 
-  // Scroll carousel to active date
   useEffect(() => {
     if (!carouselRef.current) return
     const idx = effectiveDates.findIndex(d => toDateKey(d) === activeDateKey)
@@ -149,31 +153,24 @@ export function TransitionsScreen() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
   }, [activeDateKey, effectiveDates])
 
-  // Entries for the active date
   const dateEntries = useMemo(
     () => transitions.filter(e => e.dateKey === activeDateKey),
     [transitions, activeDateKey]
   )
 
-  // Apply soldier filters (name, unit, team, etc.)
   const soldierFilteredEntries = useMemo(() => {
-    const soldierFiltered = applySoldierFilter(
-      dateEntries.map(e => e.soldier),
-      filterState
-    )
+    const soldierFiltered = applySoldierFilter(dateEntries.map(e => e.soldier), filterState)
     const soldierIds = new Set(soldierFiltered.map(s => s.id))
     return dateEntries.filter(e => soldierIds.has(e.soldier.id))
   }, [dateEntries, filterState])
 
-  // Apply transitionType filter
   const filteredEntries = useMemo(
     () => applyTransitionFilter(soldierFilteredEntries, filterState),
     [soldierFilteredEntries, filterState]
   )
 
-  // Group
   const grouped = useMemo((): Array<{ key: string; entries: TransitionEntry[] }> => {
-    if (groupBy === 'none') return [{ key: '', entries: filteredEntries }]
+    if (!groupBy) return [{ key: '', entries: filteredEntries }]
     const expanded = expandForGroupBy(filteredEntries, groupBy)
     const map = new Map<string, TransitionEntry[]>()
     for (const e of expanded) {
@@ -186,154 +183,18 @@ export function TransitionsScreen() {
       .map(([key, entries]) => ({ key, entries }))
   }, [filteredEntries, groupBy])
 
-  // Filter sections for FilterPane (transitionType prepended)
   const soldiers = useMemo(() => transitions.map(e => e.soldier), [transitions])
   const filterSections = useMemo(
     () => [TRANSITION_TYPE_SECTION, ...buildFilterSections(soldiers)],
     [soldiers]
   )
 
+  const filterActive = isFilterActive(filterState)
   const filterCount = activeFilterCount(filterState)
+  const hasGroupBy = groupBy !== null
 
   return (
-    <div dir="rtl" className="flex flex-col flex-1 overflow-hidden bg-background">
-      {/* ─── Filter/GroupBy toolbar ─── */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-outline-variant overflow-x-auto no-scrollbar">
-        {/* Filter button */}
-        <button
-          onClick={() => setFilterOpen(true)}
-          className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold border transition-colors
-            ${filterCount > 0
-              ? 'bg-primary-container text-on-primary-container border-primary/40'
-              : 'bg-surface-high text-on-surface-variant border-transparent'}`}
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-          </svg>
-          {filterCount > 0 ? `סינון (${filterCount})` : 'סינון'}
-        </button>
-
-        {/* Group-by pills */}
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
-          {GROUP_BY_OPTIONS.map(opt => (
-            <button
-              key={opt.key}
-              onClick={() => setGroupBy(opt.key)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-sm font-bold transition-colors
-                ${groupBy === opt.key
-                  ? 'bg-primary-container text-on-primary-container'
-                  : 'bg-surface-high text-on-surface-variant'}`}
-            >
-              {opt.key === 'none' ? 'קיבוץ' : opt.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {isLoading && (
-        <div className="flex-1 flex items-center justify-center text-on-surface-variant font-mono text-sm">
-          טוען נתונים...
-        </div>
-      )}
-
-      {error && (
-        <div className="mx-4 mt-4 bg-error-container/30 border border-error/50 rounded-md p-4 text-error text-sm">
-          {String(error)}
-        </div>
-      )}
-
-      {!isLoading && !error && (
-        <div className="flex-1 overflow-y-auto">
-          {/* ─── Date carousel ─── */}
-          <div className="px-4 pt-4 pb-2">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">פתיחות וסגירות</span>
-              <span className="text-xs font-mono text-on-surface-variant">
-                {format(activeDate, 'yyyy', { locale: he })}
-              </span>
-            </div>
-            <div
-              ref={carouselRef}
-              className="flex gap-2 overflow-x-auto no-scrollbar pb-1"
-              style={{ direction: 'rtl' }}
-            >
-              {effectiveDates.map(date => {
-                const dk = toDateKey(date)
-                const active = dk === activeDateKey
-                const todayDate = isToday(date)
-                const count = transitions.filter(e => e.dateKey === dk).length
-                return (
-                  <button
-                    key={dk}
-                    onClick={() => setSelectedDateKey(dk)}
-                    className={`shrink-0 flex flex-col items-center justify-center rounded-md transition-all
-                      ${active
-                        ? 'w-[80px] h-[80px] bg-primary-container border border-primary/60'
-                        : todayDate
-                          ? 'w-[60px] h-[68px] bg-surface-high border border-primary/40'
-                          : 'w-[60px] h-[68px] bg-surface-high border border-transparent'}`}
-                  >
-                    <span className={`text-[10px] font-mono uppercase mb-0.5 ${active ? 'text-on-primary-container' : 'text-on-surface-variant'}`}>
-                      {format(date, 'EEE', { locale: he })}
-                    </span>
-                    <span className={`font-bold leading-none ${active ? 'text-xl text-on-primary-container' : 'text-sm text-on-surface'}`}>
-                      {format(date, 'd.MM')}
-                    </span>
-                    {count > 0 && (
-                      <span className={`text-[9px] font-bold mt-0.5 ${active ? 'text-on-primary-container/80' : 'text-primary'}`}>
-                        {count}
-                      </span>
-                    )}
-                    {todayDate && count === 0 && (
-                      <span className={`text-[8px] font-bold mt-0.5 ${active ? 'text-on-primary-container' : 'text-primary'}`}>
-                        היום
-                      </span>
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* ─── Transitions for active date ─── */}
-          <div className="px-4 pb-4">
-            {/* Date section header */}
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-mono text-on-surface-variant">
-                {filteredEntries.length > 0 ? `${filteredEntries.length} פעולות` : ''}
-              </span>
-              <span className="text-sm font-bold text-on-surface">
-                {format(activeDate, 'EEEE, d בMMMM', { locale: he })}
-              </span>
-            </div>
-
-            {filteredEntries.length === 0 ? (
-              <div className="py-6 text-center">
-                <p className="text-sm text-on-surface-variant">אין פעולות</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {grouped.map(group => (
-                  <div key={group.key}>
-                    {groupBy !== 'none' && (
-                      <div className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2 text-right">
-                        {group.key} ({group.entries.length})
-                      </div>
-                    )}
-                    <div className="space-y-1.5">
-                      {group.entries.map((entry, i) => (
-                        <EntryRow key={`${entry.soldier.id}-${entry.types.join(',')}-${i}`} entry={entry} />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ─── Filter pane ─── */}
+    <>
       <FilterPane
         open={filterOpen}
         onClose={() => setFilterOpen(false)}
@@ -343,8 +204,150 @@ export function TransitionsScreen() {
         onMultiToggle={(key, value) => setFilterState(s => toggleMultiSelect(s, key, value))}
         onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
         onTextChange={(key, value) => setFilterState(s => setTextFilter(s, key, value))}
-        onClearAll={() => setFilterState(emptyFilterState())}
-      />
-    </div>
+        onClearAll={() => { setFilterState(emptyFilterState()); setGroupBy(null) }}
+      >
+        <CollapsibleSection label="קיבוץ לפי" badge={hasGroupBy ? 1 : undefined}>
+          {groupBy && (
+            <div className="flex items-center gap-2 bg-primary-container rounded-md px-3 py-2 mb-3">
+              <span className="text-sm font-medium text-on-primary-container flex-1">
+                {GROUP_BY_OPTIONS.find(o => o.key === groupBy)?.label}
+              </span>
+              <button
+                onClick={() => setGroupBy(null)}
+                className="text-on-primary-container/70 hover:text-on-primary-container text-base leading-none"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {!groupBy && (
+            <div className="flex flex-wrap gap-1.5">
+              {GROUP_BY_OPTIONS.map(opt => (
+                <button key={opt.key} onClick={() => setGroupBy(opt.key)}
+                  className="px-3 py-1.5 rounded-md text-sm font-medium bg-surface-high text-on-surface-variant hover:text-on-surface transition-colors">
+                  + {opt.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </CollapsibleSection>
+      </FilterPane>
+
+      <div dir="rtl" className="flex flex-col flex-1 overflow-hidden bg-background">
+        {isLoading && (
+          <div className="flex-1 flex items-center justify-center text-on-surface-variant font-mono text-sm">
+            טוען נתונים...
+          </div>
+        )}
+
+        {error && (
+          <div className="mx-4 mt-4 bg-error-container/30 border border-error/50 rounded-md p-4 text-error text-sm">
+            {String(error)}
+          </div>
+        )}
+
+        {!isLoading && !error && (
+          <div className="flex-1 overflow-y-auto">
+            {/* ─── Date carousel ─── */}
+            <div className="px-4 pt-4 pb-2">
+              <div className="flex items-center justify-between mb-2">
+                <button
+                  onClick={() => setFilterOpen(true)}
+                  className="relative flex items-center justify-center w-[36px] h-[36px] rounded-md hover:bg-surface-high transition-colors text-on-surface-variant"
+                  aria-label="פתח סינון"
+                >
+                  <FilterIcon active={filterActive || hasGroupBy} />
+                  {(filterActive || hasGroupBy) && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center px-0.5">
+                      {filterCount + (hasGroupBy ? 1 : 0)}
+                    </span>
+                  )}
+                </button>
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">פתיחות וסגירות</span>
+                <span className="text-xs font-mono text-on-surface-variant w-[36px] text-left">
+                  {format(activeDate, 'yyyy', { locale: he })}
+                </span>
+              </div>
+              <div
+                ref={carouselRef}
+                className="flex gap-2 overflow-x-auto no-scrollbar pb-1"
+                style={{ direction: 'rtl' }}
+              >
+                {effectiveDates.map(date => {
+                  const dk = toDateKey(date)
+                  const active = dk === activeDateKey
+                  const todayDate = isToday(date)
+                  const count = transitions.filter(e => e.dateKey === dk).length
+                  return (
+                    <button
+                      key={dk}
+                      onClick={() => setSelectedDateKey(dk)}
+                      className={`shrink-0 flex flex-col items-center justify-center rounded-md transition-all
+                        ${active
+                          ? 'w-[80px] h-[80px] bg-primary-container border border-primary/60'
+                          : todayDate
+                            ? 'w-[60px] h-[68px] bg-surface-high border border-primary/40'
+                            : 'w-[60px] h-[68px] bg-surface-high border border-transparent'}`}
+                    >
+                      <span className={`text-[10px] font-mono uppercase mb-0.5 ${active ? 'text-on-primary-container' : 'text-on-surface-variant'}`}>
+                        {format(date, 'EEE', { locale: he })}
+                      </span>
+                      <span className={`font-bold leading-none ${active ? 'text-xl text-on-primary-container' : 'text-sm text-on-surface'}`}>
+                        {format(date, 'd.MM')}
+                      </span>
+                      {count > 0 && (
+                        <span className={`text-[9px] font-bold mt-0.5 ${active ? 'text-on-primary-container/80' : 'text-primary'}`}>
+                          {count}
+                        </span>
+                      )}
+                      {todayDate && count === 0 && (
+                        <span className={`text-[8px] font-bold mt-0.5 ${active ? 'text-on-primary-container' : 'text-primary'}`}>
+                          היום
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* ─── Transitions for active date ─── */}
+            <div className="px-4 pb-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-mono text-on-surface-variant">
+                  {filteredEntries.length > 0 ? `${filteredEntries.length} פעולות` : ''}
+                </span>
+                <span className="text-sm font-bold text-on-surface">
+                  {format(activeDate, 'EEEE, d בMMMM', { locale: he })}
+                </span>
+              </div>
+
+              {filteredEntries.length === 0 ? (
+                <div className="py-6 text-center">
+                  <p className="text-sm text-on-surface-variant">אין פעולות</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {grouped.map(group => (
+                    <div key={group.key}>
+                      {groupBy && (
+                        <div className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2 text-right">
+                          {group.key} ({group.entries.length})
+                        </div>
+                      )}
+                      <div className="space-y-1.5">
+                        {group.entries.map((entry, i) => (
+                          <EntryRow key={`${entry.soldier.id}-${entry.types.join(',')}-${i}`} entry={entry} />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   )
 }

@@ -9,7 +9,7 @@ import type { StatusEntry } from '@/domain/types'
 
 // ── Period calculation ─────────────────────────────────────────────────────
 
-type PeriodCategory = 'army' | 'home-paid' | 'home-free' | 'sick'
+type PeriodCategory = 'army' | 'home-paid' | 'home-free' | 'sick' | 'organizing'
 
 interface Period {
   category: PeriodCategory
@@ -20,16 +20,18 @@ interface Period {
 }
 
 const PERIOD_META: Record<PeriodCategory, { label: string; color: string }> = {
-  'army':      { label: 'בסיס',       color: '#c3cc8c' },
-  'home-paid': { label: 'בית בתשלום', color: '#f4d35e' },
-  'home-free': { label: 'משוחרר',     color: '#f87171' },
-  'sick':      { label: 'מחלה',       color: '#60a5fa' },
+  'army':       { label: 'בסיס',            color: '#c3cc8c' },
+  'home-paid':  { label: 'בית בתשלום',      color: '#f4d35e' },
+  'home-free':  { label: 'משוחרר',          color: '#f87171' },
+  'sick':       { label: 'מחלה',            color: '#60a5fa' },
+  'organizing': { label: 'ימי התארגנות',    color: '#e08a3c' },
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
 function categorize(code: string, released: boolean): PeriodCategory {
   if (code === 'ג') return 'sick'
+  if (code === 'מ') return 'organizing'
   if (released) return 'home-free'
   const def = getStatus(code)
   if (def?.inArmy) return 'army'
@@ -134,12 +136,13 @@ export function SoldierScreen() {
   }
 
   const stats = useMemo(() => {
-    const armyDays  = periods.filter(p => p.category === 'army').reduce((s, p) => s + p.days, 0)
-    const homeDays  = periods.filter(p => p.category !== 'army').reduce((s, p) => s + p.days, 0)
-    const sickDays  = periods.filter(p => p.category === 'sick').reduce((s, p) => s + p.days, 0)
+    const armyDays       = periods.filter(p => p.category === 'army').reduce((s, p) => s + p.days, 0)
+    const homeDays       = periods.filter(p => p.category !== 'army').reduce((s, p) => s + p.days, 0)
+    const sickDays       = periods.filter(p => p.category === 'sick').reduce((s, p) => s + p.days, 0)
+    const organizingDays = periods.filter(p => p.category === 'organizing').reduce((s, p) => s + p.days, 0)
     const totalDays = armyDays + homeDays
     const pct       = totalDays > 0 ? Math.round((armyDays / totalDays) * 100) : 0
-    return { armyDays, homeDays, sickDays, totalDays, pct }
+    return { armyDays, homeDays, sickDays, organizingDays, totalDays, pct }
   }, [periods])
 
   const fmtDate  = (d: Date) => format(d, 'dd.MM.yy')
@@ -194,7 +197,7 @@ export function SoldierScreen() {
 
           {/* Summary stats */}
           {stats.totalDays > 0 && (
-            <div className={`grid gap-2 ${stats.sickDays > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
+            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${3 + (stats.sickDays > 0 ? 1 : 0) + (stats.organizingDays > 0 ? 1 : 0)}, 1fr)` }}>
               <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold" style={{ color: '#c3cc8c' }}>{stats.armyDays}</div>
                 <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">בסיס</div>
@@ -207,6 +210,12 @@ export function SoldierScreen() {
                 <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
                   <div className="text-2xl font-bold" style={{ color: '#60a5fa' }}>{stats.sickDays}</div>
                   <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">מחלה</div>
+                </div>
+              )}
+              {stats.organizingDays > 0 && (
+                <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold" style={{ color: '#e08a3c' }}>{stats.organizingDays}</div>
+                  <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">התארגנות</div>
                 </div>
               )}
               <div className="bg-primary-container rounded-lg p-3 text-center">

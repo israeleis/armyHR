@@ -9,7 +9,7 @@ import type { StatusEntry } from '@/domain/types'
 
 // ── Period calculation ─────────────────────────────────────────────────────
 
-type PeriodCategory = 'army' | 'home-paid' | 'home-free'
+type PeriodCategory = 'army' | 'home-paid' | 'home-free' | 'sick'
 
 interface Period {
   category: PeriodCategory
@@ -23,15 +23,16 @@ const PERIOD_META: Record<PeriodCategory, { label: string; color: string }> = {
   'army':      { label: 'בסיס',       color: '#c3cc8c' },
   'home-paid': { label: 'בית בתשלום', color: '#f4d35e' },
   'home-free': { label: 'משוחרר',     color: '#f87171' },
+  'sick':      { label: 'מחלה',       color: '#60a5fa' },
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
 function categorize(code: string, released: boolean): PeriodCategory {
+  if (code === 'ג') return 'sick'
   if (released) return 'home-free'
   const def = getStatus(code)
-  // ג (גימלים) = sick at home, paid — not physically at base
-  if (def?.inArmy && code !== 'ג') return 'army'
+  if (def?.inArmy) return 'army'
   if (def?.isPaid) return 'home-paid'
   return 'home-free'
 }
@@ -135,9 +136,10 @@ export function SoldierScreen() {
   const stats = useMemo(() => {
     const armyDays  = periods.filter(p => p.category === 'army').reduce((s, p) => s + p.days, 0)
     const homeDays  = periods.filter(p => p.category !== 'army').reduce((s, p) => s + p.days, 0)
+    const sickDays  = periods.filter(p => p.category === 'sick').reduce((s, p) => s + p.days, 0)
     const totalDays = armyDays + homeDays
     const pct       = totalDays > 0 ? Math.round((armyDays / totalDays) * 100) : 0
-    return { armyDays, homeDays, totalDays, pct }
+    return { armyDays, homeDays, sickDays, totalDays, pct }
   }, [periods])
 
   const fmtDate  = (d: Date) => format(d, 'dd.MM.yy')
@@ -192,15 +194,21 @@ export function SoldierScreen() {
 
           {/* Summary stats */}
           {stats.totalDays > 0 && (
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${stats.sickDays > 0 ? 'grid-cols-4' : 'grid-cols-3'}`}>
               <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold" style={{ color: '#c3cc8c' }}>{stats.armyDays}</div>
-                <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">ימי בסיס</div>
+                <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">בסיס</div>
               </div>
               <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold" style={{ color: '#f4d35e' }}>{stats.homeDays}</div>
-                <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">ימי בית</div>
+                <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">בית</div>
               </div>
+              {stats.sickDays > 0 && (
+                <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold" style={{ color: '#60a5fa' }}>{stats.sickDays}</div>
+                  <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">מחלה</div>
+                </div>
+              )}
               <div className="bg-primary-container rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-on-primary-container">{stats.pct}%</div>
                 <div className="text-[10px] font-mono text-on-primary-container/70 mt-0.5">זמינות</div>

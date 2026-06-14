@@ -136,13 +136,12 @@ export function SoldierScreen() {
   }
 
   const stats = useMemo(() => {
-    const armyDays       = periods.filter(p => p.category === 'army').reduce((s, p) => s + p.days, 0)
-    const homeDays       = periods.filter(p => p.category !== 'army').reduce((s, p) => s + p.days, 0)
-    const sickDays       = periods.filter(p => p.category === 'sick').reduce((s, p) => s + p.days, 0)
-    const organizingDays = periods.filter(p => p.category === 'organizing').reduce((s, p) => s + p.days, 0)
-    const totalDays = armyDays + homeDays
-    const pct       = totalDays > 0 ? Math.round((armyDays / totalDays) * 100) : 0
-    return { armyDays, homeDays, sickDays, organizingDays, totalDays, pct }
+    // Focus on paid days only (ignore משוחרר unpaid days)
+    const armyDays     = periods.filter(p => p.category === 'army').reduce((s, p) => s + p.days, 0)
+    const homePaidDays = periods.filter(p => ['home-paid', 'sick', 'organizing'].includes(p.category)).reduce((s, p) => s + p.days, 0)
+    const totalPaid    = armyDays + homePaidDays
+    const pct          = totalPaid > 0 ? Math.round((armyDays / totalPaid) * 100) : 0
+    return { armyDays, homePaidDays, totalPaid, pct }
   }, [periods])
 
   const fmtDate  = (d: Date) => format(d, 'dd.MM.yy')
@@ -195,32 +194,24 @@ export function SoldierScreen() {
             </div>
           )}
 
-          {/* Summary stats */}
-          {stats.totalDays > 0 && (
-            <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${3 + (stats.sickDays > 0 ? 1 : 0) + (stats.organizingDays > 0 ? 1 : 0)}, 1fr)` }}>
+          {/* Summary stats — paid days only */}
+          {stats.totalPaid > 0 && (
+            <div className="grid grid-cols-4 gap-2">
+              <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
+                <div className="text-2xl font-bold text-on-surface">{stats.totalPaid}</div>
+                <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">סה״כ</div>
+              </div>
               <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold" style={{ color: '#c3cc8c' }}>{stats.armyDays}</div>
                 <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">בסיס</div>
               </div>
               <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold" style={{ color: '#f4d35e' }}>{stats.homeDays}</div>
+                <div className="text-2xl font-bold" style={{ color: '#f4d35e' }}>{stats.homePaidDays}</div>
                 <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">בית</div>
               </div>
-              {stats.sickDays > 0 && (
-                <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold" style={{ color: '#60a5fa' }}>{stats.sickDays}</div>
-                  <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">מחלה</div>
-                </div>
-              )}
-              {stats.organizingDays > 0 && (
-                <div className="bg-surface-high border border-outline-variant rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold" style={{ color: '#e08a3c' }}>{stats.organizingDays}</div>
-                  <div className="text-[10px] font-mono text-on-surface-variant mt-0.5">התארגנות</div>
-                </div>
-              )}
               <div className="bg-primary-container rounded-lg p-3 text-center">
                 <div className="text-2xl font-bold text-on-primary-container">{stats.pct}%</div>
-                <div className="text-[10px] font-mono text-on-primary-container/70 mt-0.5">זמינות</div>
+                <div className="text-[10px] font-mono text-on-primary-container/70 mt-0.5">בסיס</div>
               </div>
             </div>
           )}

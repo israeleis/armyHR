@@ -1,10 +1,14 @@
 // src/features/transitions/TransitionsScreen.tsx
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { format, startOfToday, isToday, addDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useTransitions } from './useTransitions'
 import { getStatus } from '@/domain/statuses'
 import { FilterPane, CollapsibleSection } from '@/components/FilterPane'
+import { SaveViewDialog } from '@/components/SaveViewDialog'
+import { useSavedViews } from '@/hooks/useSavedViews'
+import { setActiveView } from '@/contexts/ActiveViewContext'
 import {
   emptyFilterState, isFilterActive, activeFilterCount,
   buildFilterSections, applySoldierFilter,
@@ -208,10 +212,34 @@ export function TransitionsScreen() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
   const [filterOpen, setFilterOpen] = useState(false)
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const [groupByKeys, setGroupByKeys] = useState<GroupByKey[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const carouselRef = useRef<HTMLDivElement>(null)
+  const viewBaseRef = useRef<FilterState | null>(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+  const { saveView: persistView } = useSavedViews()
   const today = startOfToday()
+
+  // Apply pending filter when navigating from a saved view in the sidebar
+  useEffect(() => {
+    const state = location.state as { pendingFilter?: FilterState; viewName?: string } | null
+    const pending = state?.pendingFilter
+    if (!pending) return
+    viewBaseRef.current = pending
+    setFilterState(pending)
+    setActiveView(state?.viewName ?? null)
+    navigate(location.pathname, { replace: true, state: null })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
+
+  // Clear active view name when filter diverges from the saved base
+  useEffect(() => {
+    if (!viewBaseRef.current || filterState === viewBaseRef.current) return
+    viewBaseRef.current = null
+    setActiveView(null)
+  }, [filterState])
 
   useEffect(() => { setExpanded(new Set()) }, [groupByKeys])
 
@@ -311,6 +339,7 @@ export function TransitionsScreen() {
         onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
         onTextChange={(key, value) => setFilterState(s => setTextFilter(s, key, value))}
         onClearAll={() => { setFilterState(emptyFilterState()); setGroupByKeys([]) }}
+        onSaveRequest={() => setSaveDialogOpen(true)}
       >
         <CollapsibleSection label="קיבוץ לפי" badge={groupByKeys.length || undefined}>
           {groupByKeys.length > 0 && (
@@ -355,6 +384,16 @@ export function TransitionsScreen() {
           )}
         </CollapsibleSection>
       </FilterPane>
+
+      <SaveViewDialog
+        open={saveDialogOpen}
+        onClose={() => setSaveDialogOpen(false)}
+        onSave={async name => {
+          await persistView({ name, view: '/transitions', filterState })
+          viewBaseRef.current = filterState
+          setActiveView(name)
+        }}
+      />
 
       <div dir="rtl" className="flex flex-col flex-1 overflow-hidden bg-background">
         {isLoading && (

@@ -3,6 +3,7 @@ import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { useTheme } from '@/hooks/useTheme'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
 import { subscribeSyncState, type SyncState } from '@/data/syncEngine'
+import { useActiveView } from '@/contexts/ActiveViewContext'
 
 interface AppHeaderProps {
   sidebarOpen: boolean
@@ -80,6 +81,7 @@ function WifiOffIcon() {
 export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
   const { theme, toggleTheme } = useTheme()
   const sheet = getSelectedSheet()
+  const { name: activeViewName } = useActiveView()
   const queryClient = useQueryClient()
 
   const [sync, setSync] = useState<SyncState>({ status: 'idle', pendingCount: 0, lastSyncAt: null, lastError: null })
@@ -124,9 +126,9 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
           {sidebarOpen ? <CloseIcon /> : <HamburgerIcon />}
         </button>
 
-        {/* CENTER: sheet name */}
+        {/* CENTER: active view name or sheet name */}
         <span className="flex-1 text-center text-sm font-bold text-on-surface truncate px-2">
-          {sheet?.name ?? 'ניהול כוח אדם'}
+          {activeViewName ?? sheet?.name ?? 'ניהול כוח אדם'}
         </span>
 
         {/* LEFT: sync + theme */}

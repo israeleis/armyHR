@@ -3,12 +3,14 @@ import { createHashRouter, Outlet, Navigate } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { useAuth } from '@/contexts/AuthContext'
+import { ActiveViewProvider } from '@/contexts/ActiveViewContext'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
 import { DiaryScreen } from '@/features/diary/DiaryScreen'
 import { DailyDetailScreen } from '@/features/daily/DailyDetailScreen'
 import { SoldierScreen } from '@/features/soldier/SoldierScreen'
 import { TrendsScreen } from '@/features/trends/TrendsScreen'
+import { SoldiersScreen } from '@/features/soldiers/SoldiersScreen'
 import { ImportScreen } from '@/features/import/ImportScreen'
 
 function useIsOnline() {
@@ -33,16 +35,18 @@ function AppLayout() {
   if (isOnline && !isSignedIn) return <Navigate to="/signin" replace />
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <AppHeader
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen(o => !o)}
-      />
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 flex flex-col">
-        <Outlet />
+    <ActiveViewProvider>
+      <div className="flex flex-col min-h-screen bg-background">
+        <AppHeader
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen(o => !o)}
+        />
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="flex-1 flex flex-col">
+          <Outlet />
+        </div>
       </div>
-    </div>
+    </ActiveViewProvider>
   )
 }
 
@@ -57,6 +61,7 @@ export const router = createHashRouter([
     element: <AppLayout />,
     children: [
       { path: 'trends', element: <TrendsScreen /> },
+      { path: 'soldiers', element: <SoldiersScreen /> },
       { path: 'diary', element: <DiaryScreen /> },
       { path: 'diary/:date', element: <DailyDetailScreen /> },
       { path: 'soldier/:id', element: <SoldierScreen /> },

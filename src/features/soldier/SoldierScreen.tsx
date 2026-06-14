@@ -24,11 +24,15 @@ const PERIOD_META: Record<PeriodCategory, { label: string; color: string }> = {
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
-function categorize(code: string): PeriodCategory {
+// ל = closing reserve service; פ = opening reserve service
+// After ל, the soldier is released — subsequent paid-home entries become משוחרר
+// until the next reserve cycle opens (פ or any in-army code).
+function categorize(code: string, released: boolean): PeriodCategory {
   const def = getStatus(code)
-  if (!def || def.inArmy) return 'army'
-  if (def.isPaid) return 'home-paid'
-  return 'home-free'
+  if (def?.inArmy) return 'army'          // army codes always mean army
+  if (released) return 'home-free'        // post-ל: everything is released
+  if (!def || !def.isPaid) return 'home-free'
+  return 'home-paid'
 }
 
 function calculatePeriods(entries: StatusEntry[]): Period[] {
@@ -41,14 +45,23 @@ function calculatePeriods(entries: StatusEntry[]): Period[] {
   if (sorted.length === 0) return []
 
   const periods: Period[] = []
-  let start  = sorted[0].date
-  let cat    = categorize(sorted[0].code)
-  let prev   = sorted[0].date
+  let released = false   // true after ל, until next army/פ entry
+
+  let start = sorted[0].date
+  let cat   = categorize(sorted[0].code, released)
+  let prev  = sorted[0].date
+
+  // Update release state after processing the first entry
+  if (sorted[0].code === 'ל') released = true
 
   for (let i = 1; i < sorted.length; i++) {
-    const entry   = sorted[i]
-    const entryCat = categorize(entry.code)
-    const gap      = Math.round((entry.date.getTime() - prev.getTime()) / DAY_MS)
+    const entry = sorted[i]
+    const gap   = Math.round((entry.date.getTime() - prev.getTime()) / DAY_MS)
+
+    // A new reserve cycle resets the released flag
+    if (entry.code === 'פ' || getStatus(entry.code)?.inArmy) released = false
+
+    const entryCat = categorize(entry.code, released)
 
     // Break on category change OR date gap larger than 1 day
     if (entryCat !== cat || gap > 1) {
@@ -61,10 +74,13 @@ function calculatePeriods(entries: StatusEntry[]): Period[] {
       start = entry.date
       cat   = entryCat
     }
+
     prev = entry.date
+
+    // Mark release after processing the ל entry itself (ל day stays in its own period)
+    if (entry.code === 'ל') released = true
   }
 
-  // Final period
   periods.push({
     category: cat,
     startDate: start,
@@ -72,7 +88,7 @@ function calculatePeriods(entries: StatusEntry[]): Period[] {
     days: Math.round((prev.getTime() - start.getTime()) / DAY_MS) + 1,
   })
 
-  return periods.reverse() // most recent first
+  return periods.reverse()
 }
 
 // ── SoldierScreen ──────────────────────────────────────────────────────────

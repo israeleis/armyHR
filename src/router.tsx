@@ -37,6 +37,14 @@ function AppLayout() {
     isSignedIn ? false : null
   )
 
+  // Start sync engine once — provides a stable token getter so it always uses the latest token
+  const tokenRef = { current: token }
+  tokenRef.current = token
+  useEffect(() => {
+    return initSyncEngine(() => tokenRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     if (isSignedIn) { setRefreshFailed(false); return }
     if (!isOnline)  { setRefreshFailed(false); return }
@@ -55,13 +63,6 @@ function AppLayout() {
     )
   }
 
-  // Start sync engine once — provides a stable token getter so it always uses the latest token
-  const tokenRef = { current: token }
-  tokenRef.current = token
-  useEffect(() => {
-    return initSyncEngine(() => tokenRef.current)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
   if (isOnline && !isSignedIn) return <Navigate to="/signin" replace />
 
   return (

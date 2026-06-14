@@ -12,6 +12,7 @@ interface FilterPaneProps {
   onTextChange: (key: string, value: string) => void
   onClearAll: () => void
   onSaveRequest?: () => void
+  children?: React.ReactNode
 }
 
 function CloseIcon() {
@@ -41,7 +42,7 @@ function CheckIcon() {
 
 // ── Collapsible section ────────────────────────────────────────────────────
 
-function CollapsibleSection({ label, badge, children }: { label: string; badge?: number; children: React.ReactNode }) {
+export function CollapsibleSection({ label, badge, children }: { label: string; badge?: number; children: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false)
   return (
     <div className="border-b border-outline-variant last:border-b-0">
@@ -141,7 +142,7 @@ function TextContent({ value, onChange }: { value: string; onChange: (v: string)
 
 export function FilterPane({
   open, onClose, sections, multiSelect, text,
-  onMultiToggle, onMultiClear, onTextChange, onClearAll, onSaveRequest,
+  onMultiToggle, onMultiClear, onTextChange, onClearAll, onSaveRequest, children,
 }: FilterPaneProps) {
   return (
     <>
@@ -172,6 +173,7 @@ export function FilterPane({
 
         {/* Sections */}
         <div className="flex-1 overflow-y-auto">
+          {children}
           {sections.map(section => {
             if (section.type === 'multiselect') {
               const selected = multiSelect[section.key] ?? new Set<string>()

@@ -89,6 +89,11 @@ html.light {
   box-sizing: border-box;
 }
 
+/* Remove browser focus outline for mouse/touch; keep it for keyboard navigation */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
 body {
   font-family: "Public Sans", system-ui, sans-serif;
   background-color: var(--color-surface);

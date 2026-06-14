@@ -1,10 +1,11 @@
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
   PieChart, Pie, Cell,
+  useIsTooltipActive, useActiveTooltipCoordinate, useActiveTooltipDataPoints, useActiveTooltipLabel,
 } from 'recharts'
 import { format, parseISO } from 'date-fns'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useDiaryData } from '@/features/diary/useDiaryData'
 import { FilterPane } from '@/components/FilterPane'
 import { SaveViewDialog } from '@/components/SaveViewDialog'
@@ -17,6 +18,7 @@ import {
   type FilterState,
 } from '@/features/filters'
 import { useSavedViews } from '@/hooks/useSavedViews'
+import { setActiveView, clearActiveView } from '@/contexts/ActiveViewContext'
 
 const TIME_TABS = ['שבועי', 'חודשי', 'כל הזמן'] as const
 type TimeTab = typeof TIME_TABS[number]
@@ -185,19 +187,106 @@ function TimeRangeSlider({
   )
 }
 
+// ── Active dot that renders the value as an SVG label next to the dot ─────
+
+function ActiveDotLabel({ cx, cy, fill, value, dataKey, selectedLine, onToggle }: {
+  cx?: number; cy?: number; fill: string; value?: number
+  dataKey?: string; selectedLine: string | null; onToggle: (key: string) => void
+}) {
+  if (cx == null || cy == null || value == null) return null
+  const isSelected = selectedLine === null || selectedLine === dataKey
+  return (
+    <g style={{ cursor: 'pointer' }} onClick={() => dataKey && onToggle(dataKey)}>
+      <circle cx={cx} cy={cy} r={5} fill={fill} opacity={isSelected ? 1 : 0.3} />
+      {isSelected && (
+        <text
+          x={cx}
+          y={cy - 10}
+          fill={fill}
+          fontSize={13}
+          fontWeight="bold"
+          fontFamily="JetBrains Mono"
+          textAnchor="middle"
+          dominantBaseline="auto"
+        >
+          {value}
+        </text>
+      )}
+    </g>
+  )
+}
+
+// ── Tooltip date bridge — lives inside LineChart to access recharts v3 store ──
+
+// useActiveTooltipDataPoints returns the raw row objects (not recharts payload items)
+type RawRow = { date: Date }
+
+type ActiveDate = { label: string; dateKey: string; x: number }
+
+function TooltipStateCapture({ onShow, onHide }: {
+  onShow: (d: ActiveDate) => void
+  onHide: () => void
+}) {
+  const isActive = useIsTooltipActive()
+  const coordinate = useActiveTooltipCoordinate()
+  const dataPoints = useActiveTooltipDataPoints() as RawRow[] | undefined
+  const label = useActiveTooltipLabel()
+
+  const onShowRef = useRef(onShow)
+  const onHideRef = useRef(onHide)
+  onShowRef.current = onShow
+  onHideRef.current = onHide
+
+  const dataPointsRef = useRef(dataPoints)
+  dataPointsRef.current = dataPoints
+  const coordinateRef = useRef(coordinate)
+  coordinateRef.current = coordinate
+
+  const labelStr = String(label ?? '')
+  const x = coordinate?.x ?? -1
+
+  useEffect(() => {
+    const row = dataPointsRef.current?.[0]
+    if (isActive && row?.date) {
+      onShowRef.current({ label: labelStr, dateKey: toDateKey(row.date), x: coordinateRef.current?.x ?? 0 })
+    } else if (!isActive) {
+      onHideRef.current()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, x, labelStr])
+
+  return null
+}
+
 // ── TrendsScreen ───────────────────────────────────────────────────────────
 
 export function TrendsScreen() {
   const { data, isLoading } = useDiaryData()
   const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState<TimeTab>('שבועי')
   const [filterOpen, setFilterOpen] = useState(false)
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const { saveView: persistView } = useSavedViews()
+  const viewBaseRef = useRef<FilterState | null>(null)
   const [windowStartMs, setWindowStartMs] = useState<number | null>(null)
   const [windowEndMs, setWindowEndMs] = useState<number | null>(null)
+  const [activeDate, setActiveDate] = useState<ActiveDate | null>(null)
+  const iconHoveredRef = useRef(false)
+  const hideDateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const handleDateShow = useCallback((d: ActiveDate) => {
+    if (hideDateTimerRef.current) { clearTimeout(hideDateTimerRef.current); hideDateTimerRef.current = null }
+    setActiveDate(d)
+  }, [])
+  const handleDateHide = useCallback(() => {
+    hideDateTimerRef.current = setTimeout(() => {
+      if (!iconHoveredRef.current) setActiveDate(null)
+    }, 120)
+  }, [])
+  const [selectedLine, setSelectedLine] = useState<string | null>(null)
+  const toggleLine = useCallback((key: string) => setSelectedLine(prev => prev === key ? null : key), [])
 
   const filterSections = useMemo(() => buildFilterSections(data?.soldiers ?? []), [data?.soldiers])
 
@@ -228,10 +317,28 @@ export function TrendsScreen() {
     setWindowStartMs(days !== null && maxMs ? Math.max(minMs, maxMs - days * DAY_MS) : null)
   }, [activeTab])
 
-  // Apply pending filter from sidebar navigation or shared URL (mount only)
+  // Apply pending filter from sidebar navigation (also fires when re-navigating to same route)
   useEffect(() => {
-    const pending = (location.state as { pendingFilter?: FilterState } | null)?.pendingFilter
-    if (pending) { setFilterState(pending); return }
+    const state = location.state as { pendingFilter?: FilterState; viewName?: string } | null
+    const pending = state?.pendingFilter
+    if (!pending) return
+    viewBaseRef.current = pending
+    setFilterState(pending)
+    setActiveView(state?.viewName ?? null)
+    navigate(location.pathname, { replace: true, state: null })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state])
+
+  // Deselect active view when filter diverges from the saved base
+  useEffect(() => {
+    if (!viewBaseRef.current || filterState === viewBaseRef.current) return
+    viewBaseRef.current = null
+    clearActiveView()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterState])
+
+  // Apply filter from shared URL param on mount only
+  useEffect(() => {
     const encoded = searchParams.get('filter')
     if (encoded) {
       const decoded = decodeFilterState(encoded)
@@ -351,7 +458,7 @@ export function TrendsScreen() {
         onMultiToggle={(key, val) => setFilterState(s => toggleMultiSelect(s, key, val))}
         onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
         onTextChange={(key, val) => setFilterState(s => setTextFilter(s, key, val))}
-        onClearAll={() => setFilterState(emptyFilterState())}
+        onClearAll={() => { setFilterState(emptyFilterState()); viewBaseRef.current = null; clearActiveView() }}
         onSaveRequest={() => setSaveDialogOpen(true)}
       />
       <SaveViewDialog
@@ -424,6 +531,7 @@ export function TrendsScreen() {
                 {/* Line chart — trend over time */}
                 <div className="bg-surface-high rounded-lg p-4 border border-outline-variant">
                   <div className="text-xs font-mono font-bold text-primary mb-3">מגמה לאורך זמן</div>
+                  <div className="relative pt-14">
                   <ResponsiveContainer width="100%" height={220}>
                     <LineChart data={lineChartData} margin={{ top: 8, right: 8, left: -20, bottom: 8 }}>
                       <CartesianGrid stroke="#47483c" strokeDasharray="4 4" />
@@ -439,23 +547,60 @@ export function TrendsScreen() {
                         tickLine={false}
                         allowDecimals={false}
                       />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#201f1f',
-                          border: '1px solid #47483c',
-                          borderRadius: 4,
-                          fontFamily: 'Public Sans',
-                          direction: 'rtl',
-                        }}
-                        labelStyle={{ color: '#e5e2e1', fontWeight: 700 }}
-                      />
+                      <Tooltip content={() => null} />
+                      <TooltipStateCapture onShow={handleDateShow} onHide={handleDateHide} />
                       <Legend wrapperStyle={{ fontSize: 12, fontFamily: 'Public Sans', color: '#c8c7b8', paddingTop: 8 }} />
-                      <Line type="monotone" dataKey="בסיס"      stroke="#c3cc8c" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="בבית בתשלום"  stroke="#f4d35e" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="משוחרר"    stroke="#f87171" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
-                      <Line type="monotone" dataKey="גימלים"    stroke="#60a5fa" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                      {([
+                        { key: 'בסיס',        color: '#c3cc8c' },
+                        { key: 'בבית בתשלום', color: '#f4d35e' },
+                        { key: 'משוחרר',      color: '#f87171' },
+                        { key: 'גימלים',      color: '#60a5fa' },
+                      ] as const).map(({ key, color }) => {
+                        const dimmed = selectedLine !== null && selectedLine !== key
+                        return (
+                          <Line
+                            key={key}
+                            type="monotone"
+                            dataKey={key}
+                            stroke={color}
+                            strokeWidth={dimmed ? 1 : 2}
+                            strokeOpacity={dimmed ? 0.25 : 1}
+                            dot={false}
+                            activeDot={(p: any) => (
+                              <ActiveDotLabel {...p} fill={color} selectedLine={selectedLine} onToggle={toggleLine} />
+                            )}
+                          />
+                        )
+                      })}
                     </LineChart>
                   </ResponsiveContainer>
+
+                  {activeDate && (
+                    <button
+                      onClick={() => navigate(`/diary/${activeDate.dateKey}`)}
+                      style={{
+                        position: 'absolute',
+                        left: activeDate.x,
+                        top: 6,
+                        transform: 'translateX(-50%)',
+                        zIndex: 10,
+                      }}
+                      className="flex items-center justify-center w-6 h-6 rounded-full bg-primary-container text-on-primary-container hover:bg-primary hover:text-on-primary transition-colors shadow-md"
+                      title={`עבור ל-${activeDate.label}`}
+                      onMouseEnter={() => {
+                        iconHoveredRef.current = true
+                        if (hideDateTimerRef.current) { clearTimeout(hideDateTimerRef.current); hideDateTimerRef.current = null }
+                      }}
+                      onMouseLeave={() => { iconHoveredRef.current = false; setActiveDate(null) }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                        <polyline points="15 3 21 3 21 9"/>
+                        <line x1="10" y1="14" x2="21" y2="3"/>
+                      </svg>
+                    </button>
+                  )}
+                  </div>
                 </div>
 
                 {/* Bar chart — unit comparison (only if multiple units) */}

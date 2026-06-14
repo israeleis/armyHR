@@ -4,6 +4,7 @@ import { AppHeader } from '@/components/AppHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { useAuth } from '@/contexts/AuthContext'
 import { ActiveViewProvider } from '@/contexts/ActiveViewContext'
+import { initSyncEngine } from '@/data/syncEngine'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
 import { DiaryScreen } from '@/features/diary/DiaryScreen'
@@ -26,9 +27,31 @@ function useIsOnline() {
 }
 
 function AppLayout() {
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, token, userEmail, setToken } = useAuth()
   const isOnline = useIsOnline()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Start sync engine once — provides a stable token getter so it always uses the latest token
+  const tokenRef = { current: token }
+  tokenRef.current = token
+  useEffect(() => {
+    return initSyncEngine(() => tokenRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // If we have a token but no cached email, fetch it from Google and cache it
+  useEffect(() => {
+    if (!token || userEmail) return
+    fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then((info: { email?: string } | null) => {
+        if (info?.email) setToken(token, info.email)
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token])
 
   // Only block access when ONLINE and not authenticated.
   // Offline: allow cached data to show; redirect when connectivity returns.

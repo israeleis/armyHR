@@ -16,6 +16,7 @@ export interface QueuedWrite {
   col: number           // 0-indexed
   oldValue: string
   newValue: string
+  note?: string         // optional cell note to write after the value
   createdAt: number     // Date.now()
   attempts: number
   lastAttemptAt?: number

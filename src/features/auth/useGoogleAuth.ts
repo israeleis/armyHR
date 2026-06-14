@@ -33,7 +33,7 @@ export function useGoogleAuth() {
     }
     const client = window.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
-      scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file',
+      scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive',
       callback: async (response) => {
         if (response.access_token) {
           // Fetch email from Google userinfo endpoint

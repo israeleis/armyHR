@@ -145,11 +145,13 @@ export function SoldierScreen() {
       }
 
       // Build cell note
-      const now  = format(new Date(), 'dd/MM/yyyy HH:mm')
-      const who  = userEmail ?? 'משתמש'
+      const now         = format(new Date(), 'dd/MM/yyyy HH:mm')
+      const who         = userEmail ?? 'לא ידוע'
+      const oldName     = getStatus(oldCode)?.name ?? oldCode
+      const newName     = getStatus(newCode)?.name ?? newCode
       const note = comment
-        ? `שונה על ידי ${who} ב-${now}\nהערה: ${comment}`
-        : `שונה על ידי ${who} ב-${now}`
+        ? `${who} | ${now}\n${oldName} ← ${newName}\nהערה: ${comment}`
+        : `${who} | ${now}\n${oldName} ← ${newName}`
 
       await enqueueWrite({
         spreadsheetId: sheet.id,

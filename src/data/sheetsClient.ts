@@ -65,6 +65,21 @@ export async function getSheetTabs(
   return (data.sheets ?? []).map((s: any) => s.properties.title as string)
 }
 
+/** Look up the numeric sheetId for a given tab name */
+async function getSheetIdByName(
+  token: string,
+  spreadsheetId: string,
+  sheetName: string,
+): Promise<number> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties`
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } })
+  if (!res.ok) throw new Error(`Sheets API ${res.status}: ${await res.text()}`)
+  const data = await res.json()
+  const sheet = (data.sheets ?? []).find((s: any) => s.properties.title === sheetName)
+  if (!sheet) throw new Error(`Sheet tab "${sheetName}" not found`)
+  return sheet.properties.sheetId as number
+}
+
 export interface CellUpdate {
   spreadsheetId: string
   sheetName: string
@@ -106,21 +121,38 @@ export async function readCell(
   return ((data.values ?? [['']])[0]?.[0] ?? '') as string
 }
 
-/** Add a threaded comment to a Google Sheets file via the Drive API.
- *  Shows the authenticated user as author — requires drive.file scope.
- *  content should include the cell reference and change details. */
-export async function addDriveComment(
+/** Write a cell note via Sheets API batchUpdate — creates the triangle chip on the cell.
+ *  Note text is plain string; include author/timestamp in the text for attribution. */
+export async function setCellNote(
   token: string,
   spreadsheetId: string,
-  content: string,
+  sheetName: string,
+  row: number,
+  col: number,
+  note: string,
 ): Promise<void> {
-  const url = `https://www.googleapis.com/drive/v3/files/${spreadsheetId}/comments?fields=id`
+  const sheetId = await getSheetIdByName(token, spreadsheetId, sheetName)
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/batchUpdate`
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content }),
+    body: JSON.stringify({
+      requests: [{
+        updateCells: {
+          range: {
+            sheetId,
+            startRowIndex: row,
+            endRowIndex: row + 1,
+            startColumnIndex: col,
+            endColumnIndex: col + 1,
+          },
+          rows: [{ values: [{ note }] }],
+          fields: 'note',
+        },
+      }],
+    }),
   })
-  if (!res.ok) throw new Error(`Drive comments API ${res.status}: ${await res.text()}`)
+  if (!res.ok) throw new Error(`Sheets batchUpdate (note) ${res.status}: ${await res.text()}`)
 }
 
 // ── Sheet Picker: folder browse + search + paste ──────────────────────────

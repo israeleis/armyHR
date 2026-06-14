@@ -3,6 +3,7 @@ import { createHashRouter, Outlet, Navigate } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { useAuth } from '@/contexts/AuthContext'
+import { useGoogleAuth } from '@/features/auth/useGoogleAuth'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
 import { DiaryScreen } from '@/features/diary/DiaryScreen'
@@ -24,12 +25,33 @@ function useIsOnline() {
 }
 
 function AppLayout() {
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, userEmail } = useAuth()
+  const { silentRefresh } = useGoogleAuth()
   const isOnline = useIsOnline()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // null = still checking, true = gave up (redirect to signin), false = ok
+  const [refreshFailed, setRefreshFailed] = useState<boolean | null>(
+    isSignedIn ? false : null
+  )
 
-  // Only block access when ONLINE and not authenticated.
-  // Offline: allow cached data to show; redirect when connectivity returns.
+  useEffect(() => {
+    if (isSignedIn) { setRefreshFailed(false); return }
+    if (!isOnline)  { setRefreshFailed(false); return }
+    if (!userEmail) { setRefreshFailed(true);  return }
+
+    // Token expired but we know the user's email — try a silent GIS grant
+    silentRefresh(userEmail).then(ok => setRefreshFailed(!ok))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (refreshFailed === null) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-on-surface-variant font-mono text-sm">מתחבר...</div>
+      </div>
+    )
+  }
+
   if (isOnline && !isSignedIn) return <Navigate to="/signin" replace />
 
   return (
@@ -48,10 +70,8 @@ function AppLayout() {
 
 export const router = createHashRouter([
   { path: '/', element: <Navigate to="/trends" replace /> },
-  // Public routes — no auth required, no AppLayout wrapper
   { path: '/signin', element: <SignInScreen /> },
   { path: '/sheets', element: <SheetPickerScreen /> },
-  // Protected routes — AppLayout redirects to /signin if not authenticated
   {
     path: '/',
     element: <AppLayout />,

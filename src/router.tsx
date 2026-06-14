@@ -4,6 +4,7 @@ import { AppHeader } from '@/components/AppHeader'
 import { Sidebar } from '@/components/Sidebar'
 import { useAuth } from '@/contexts/AuthContext'
 import { ActiveViewProvider } from '@/contexts/ActiveViewContext'
+import { initSyncEngine } from '@/data/syncEngine'
 import { SignInScreen } from '@/features/auth/SignInScreen'
 import { SheetPickerScreen } from '@/features/sheet-picker/SheetPickerScreen'
 import { DiaryScreen } from '@/features/diary/DiaryScreen'
@@ -26,9 +27,17 @@ function useIsOnline() {
 }
 
 function AppLayout() {
-  const { isSignedIn } = useAuth()
+  const { isSignedIn, token } = useAuth()
   const isOnline = useIsOnline()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  // Start sync engine once — provides a stable token getter so it always uses the latest token
+  const tokenRef = { current: token }
+  tokenRef.current = token
+  useEffect(() => {
+    return initSyncEngine(() => tokenRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Only block access when ONLINE and not authenticated.
   // Offline: allow cached data to show; redirect when connectivity returns.

@@ -56,6 +56,12 @@ export function initSyncEngine(getToken: () => string | null) {
   }
 }
 
+/** Call after enqueueWrite so the header badge reflects the new count immediately */
+export async function refreshPendingCount(): Promise<void> {
+  const count = await db.writeQueue.count()
+  emit({ pendingCount: count })
+}
+
 export async function drainQueue(): Promise<void> {
   if (!navigator.onLine) {
     emit({ status: 'offline' })

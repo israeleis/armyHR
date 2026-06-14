@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQueryClient, useIsFetching } from '@tanstack/react-query'
 import { useTheme } from '@/hooks/useTheme'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
-import { subscribeSyncState, type SyncState } from '@/data/syncEngine'
+import { subscribeSyncState, drainQueue, type SyncState } from '@/data/syncEngine'
 import { useActiveView } from '@/contexts/ActiveViewContext'
 
 interface AppHeaderProps {
@@ -100,6 +100,7 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
 
   function handleSync() {
     if (!isOnline || isFetching) return
+    drainQueue().catch(console.error)
     queryClient.invalidateQueries({ queryKey: ['diary'] })
   }
 

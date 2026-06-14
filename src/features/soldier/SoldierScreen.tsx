@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
 import { enqueueWrite } from '@/data/writeQueue'
 import { getSnapshot, saveSnapshot, applyWriteToSnapshot } from '@/data/localCache'
+import { refreshPendingCount } from '@/data/syncEngine'
 import type { StatusEntry } from '@/domain/types'
 
 // ── Period calculation ─────────────────────────────────────────────────────
@@ -159,6 +160,7 @@ export function SoldierScreen() {
         newValue: newCode,
         note,
       })
+      await refreshPendingCount()
     } catch (err) {
       console.error('Failed to queue status write:', err)
     }

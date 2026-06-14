@@ -113,12 +113,12 @@ export function applySoldierFilter(soldiers: SoldierFields[], state: FilterState
   if (!isFilterActive(state)) return soldiers
 
   return soldiers.filter(s => {
-    // Text filters
+    // Text filters — split by spaces, ALL parts must appear in the field value
     for (const [key, text] of Object.entries(state.text)) {
       if (!text.trim()) continue
-      const q = text.toLowerCase().trim()
-      const val = getSoldierValue(s, key)
-      if (!val.toLowerCase().includes(q)) return false
+      const parts = text.toLowerCase().trim().split(/\s+/)
+      const val = getSoldierValue(s, key).toLowerCase()
+      if (!parts.every(p => val.includes(p))) return false
     }
     // Multi-select filters
     for (const [key, selected] of Object.entries(state.multiSelect)) {

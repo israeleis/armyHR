@@ -251,6 +251,7 @@ export function TransitionsScreen() {
             {/* ─── Date carousel ─── */}
             <div className="px-4 pt-4 pb-2">
               <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">פתיחות וסגירות</span>
                 <button
                   onClick={() => setFilterOpen(true)}
                   className="relative flex items-center justify-center w-[36px] h-[36px] rounded-md hover:bg-surface-high transition-colors text-on-surface-variant"
@@ -258,15 +259,11 @@ export function TransitionsScreen() {
                 >
                   <FilterIcon active={filterActive || hasGroupBy} />
                   {(filterActive || hasGroupBy) && (
-                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center px-0.5">
+                    <span className="absolute -top-0.5 -left-0.5 min-w-[16px] h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center px-0.5">
                       {filterCount + (hasGroupBy ? 1 : 0)}
                     </span>
                   )}
                 </button>
-                <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider">פתיחות וסגירות</span>
-                <span className="text-xs font-mono text-on-surface-variant w-[36px] text-left">
-                  {format(activeDate, 'yyyy', { locale: he })}
-                </span>
               </div>
               <div
                 ref={carouselRef}

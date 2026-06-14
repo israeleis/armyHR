@@ -1,5 +1,5 @@
 // src/features/transitions/TransitionsScreen.tsx
-import { useMemo, useState, useRef, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { format, startOfToday, isToday, addDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useTransitions } from './useTransitions'
@@ -46,28 +46,82 @@ function getGroupLabel(entry: TransitionEntry, key: GroupByKey): string {
   }
 }
 
-// Expand entries so those with both types appear in each transitionType group.
-function expandForGroupBy(entries: TransitionEntry[], groupBy: GroupByKey | null): TransitionEntry[] {
-  if (groupBy !== 'transitionType') return entries
-  const expanded: TransitionEntry[] = []
+// Expand dual-type entries into two when grouping by transitionType.
+function expandForType(entries: TransitionEntry[]): TransitionEntry[] {
+  const result: TransitionEntry[] = []
   for (const e of entries) {
     if (e.types.length === 2) {
-      expanded.push({ ...e, types: ['פתיחה'] })
-      expanded.push({ ...e, types: ['סגירה'] })
+      result.push({ ...e, types: ['פתיחה'] })
+      result.push({ ...e, types: ['סגירה'] })
     } else {
-      expanded.push(e)
+      result.push(e)
     }
   }
-  return expanded
+  return result
 }
 
 function applyTransitionFilter(entries: TransitionEntry[], filterState: FilterState): TransitionEntry[] {
   const selectedTypes = filterState.multiSelect['transitionType'] ?? new Set<string>()
-  return entries.filter(e => {
-    if (selectedTypes.size > 0 && !e.types.some(t => selectedTypes.has(t))) return false
-    return true
-  })
+  return entries.filter(e =>
+    selectedTypes.size === 0 || e.types.some(t => selectedTypes.has(t))
+  )
 }
+
+// ── Flat list for grouped rendering ───────────────────────────────────────
+
+type FlatHeader = { type: 'header'; title: string; depth: number; count: number; path: string }
+type FlatEntry  = { type: 'entry';  entry: TransitionEntry; depth: number }
+type FlatItem   = FlatHeader | FlatEntry
+
+function buildFlatItems(
+  entries: TransitionEntry[],
+  keys: GroupByKey[],
+  depth = 0,
+  parentPath = '',
+): FlatItem[] {
+  if (keys.length === 0) {
+    return entries.map(e => ({ type: 'entry' as const, entry: e, depth }))
+  }
+  const [key, ...rest] = keys
+  const work = key === 'transitionType' ? expandForType(entries) : entries
+  const map = new Map<string, TransitionEntry[]>()
+  for (const e of work) {
+    const val = getGroupLabel(e, key)
+    if (!map.has(val)) map.set(val, [])
+    map.get(val)!.push(e)
+  }
+  const result: FlatItem[] = []
+  for (const [title, group] of [...map.entries()].sort(([a], [b]) => a.localeCompare(b, 'he'))) {
+    const path = parentPath ? `${parentPath}||${title}` : title
+    result.push({ type: 'header', title, depth, count: group.length, path })
+    result.push(...buildFlatItems(group, rest, depth + 1, path))
+  }
+  return result
+}
+
+function applyCollapse(
+  items: FlatItem[],
+  expanded: Set<string>,
+): Array<FlatItem & { isExpanded?: boolean }> {
+  const result: Array<FlatItem & { isExpanded?: boolean }> = []
+  let collapsedDepth: number | null = null
+  for (const item of items) {
+    if (collapsedDepth !== null) {
+      if (item.type === 'header' && item.depth <= collapsedDepth) collapsedDepth = null
+      else continue
+    }
+    if (item.type === 'header') {
+      const isExpanded = expanded.has(item.path)
+      result.push({ ...item, isExpanded })
+      if (!isExpanded) collapsedDepth = item.depth
+    } else {
+      result.push(item)
+    }
+  }
+  return result
+}
+
+// ── Icons ──────────────────────────────────────────────────────────────────
 
 function FilterIcon({ active }: { active: boolean }) {
   return (
@@ -79,15 +133,44 @@ function FilterIcon({ active }: { active: boolean }) {
   )
 }
 
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      strokeLinecap="round" strokeLinejoin="round"
+      style={{ transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  )
+}
+
+function ArrowUp() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="18 15 12 9 6 15"/>
+    </svg>
+  )
+}
+
+function ArrowDown() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  )
+}
+
 // ── Entry row ──────────────────────────────────────────────────────────────
 
-function EntryRow({ entry }: { entry: TransitionEntry }) {
+function EntryRow({ entry, indent }: { entry: TransitionEntry; indent: number }) {
   const statusName = getStatus(entry.statusCode)?.name ?? entry.statusCode
   const { soldier, types } = entry
   const initials = soldier.name.trim().split(' ').map(w => w[0]).join('').slice(0, 2)
 
   return (
-    <div className="flex flex-row-reverse items-center gap-3 bg-surface-high border border-outline-variant rounded-md px-3 py-2.5">
+    <div
+      className="flex flex-row-reverse items-center gap-3 bg-surface-high border border-outline-variant rounded-md px-3 py-2.5"
+      style={{ marginRight: indent * 12 }}
+    >
       <div className="shrink-0 w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-xs font-bold text-on-primary-container">
         {initials}
       </div>
@@ -125,9 +208,30 @@ export function TransitionsScreen() {
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
   const [filterOpen, setFilterOpen] = useState(false)
-  const [groupBy, setGroupBy] = useState<GroupByKey | null>(null)
+  const [groupByKeys, setGroupByKeys] = useState<GroupByKey[]>([])
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const carouselRef = useRef<HTMLDivElement>(null)
   const today = startOfToday()
+
+  useEffect(() => { setExpanded(new Set()) }, [groupByKeys])
+
+  const toggleExpanded = useCallback((path: string) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(path) ? next.delete(path) : next.add(path)
+      return next
+    })
+  }, [])
+
+  const addGroupKey    = useCallback((k: GroupByKey) => setGroupByKeys(p => [...p, k]), [])
+  const removeGroupKey = useCallback((k: GroupByKey) => setGroupByKeys(p => p.filter(x => x !== k)), [])
+  const moveGroupKey   = useCallback((idx: number, dir: -1 | 1) => setGroupByKeys(p => {
+    const next = [...p]
+    const to = idx + dir
+    if (to < 0 || to >= next.length) return p
+    ;[next[idx], next[to]] = [next[to], next[idx]]
+    return next
+  }), [])
 
   const effectiveDates = dates.length > 0
     ? dates
@@ -151,7 +255,7 @@ export function TransitionsScreen() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
   }, [activeDateKey, effectiveDates])
 
-  // Apply all filters across all dates — used for carousel counts and active date display
+  // Apply all filters across all dates (for carousel counts + active date display)
   const allFilteredTransitions = useMemo(() => {
     const { transitionType: _, ...restMulti } = filterState.multiSelect
     const soldierOnlyState = { ...filterState, multiSelect: restMulti }
@@ -163,7 +267,6 @@ export function TransitionsScreen() {
     )
   }, [transitions, filterState])
 
-  // Per-date count after filters (drives carousel dimming and badges)
   const countByDate = useMemo(() => {
     const map = new Map<string, number>()
     for (const e of allFilteredTransitions) map.set(e.dateKey, (map.get(e.dateKey) ?? 0) + 1)
@@ -175,19 +278,15 @@ export function TransitionsScreen() {
     [allFilteredTransitions, activeDateKey]
   )
 
-  const grouped = useMemo((): Array<{ key: string; entries: TransitionEntry[] }> => {
-    if (!groupBy) return [{ key: '', entries: filteredEntries }]
-    const expanded = expandForGroupBy(filteredEntries, groupBy)
-    const map = new Map<string, TransitionEntry[]>()
-    for (const e of expanded) {
-      const g = getGroupLabel(e, groupBy)
-      if (!map.has(g)) map.set(g, [])
-      map.get(g)!.push(e)
-    }
-    return [...map.entries()]
-      .sort(([a], [b]) => a.localeCompare(b, 'he'))
-      .map(([key, entries]) => ({ key, entries }))
-  }, [filteredEntries, groupBy])
+  const flatItems = useMemo(
+    () => buildFlatItems(filteredEntries, groupByKeys),
+    [filteredEntries, groupByKeys]
+  )
+
+  const visibleItems = useMemo(
+    () => groupByKeys.length > 0 ? applyCollapse(flatItems, expanded) : flatItems,
+    [flatItems, expanded, groupByKeys.length]
+  )
 
   const soldiers = useMemo(() => transitions.map(e => e.soldier), [transitions])
   const filterSections = useMemo(
@@ -196,8 +295,9 @@ export function TransitionsScreen() {
   )
 
   const filterActive = isFilterActive(filterState)
-  const filterCount = activeFilterCount(filterState)
-  const hasGroupBy = groupBy !== null
+  const filterCount  = activeFilterCount(filterState)
+  const hasGroupBy   = groupByKeys.length > 0
+  const available    = GROUP_BY_OPTIONS.filter(o => !groupByKeys.includes(o.key))
 
   return (
     <>
@@ -210,31 +310,48 @@ export function TransitionsScreen() {
         onMultiToggle={(key, value) => setFilterState(s => toggleMultiSelect(s, key, value))}
         onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
         onTextChange={(key, value) => setFilterState(s => setTextFilter(s, key, value))}
-        onClearAll={() => { setFilterState(emptyFilterState()); setGroupBy(null) }}
+        onClearAll={() => { setFilterState(emptyFilterState()); setGroupByKeys([]) }}
       >
-        <CollapsibleSection label="קיבוץ לפי" badge={hasGroupBy ? 1 : undefined}>
-          {groupBy && (
-            <div className="flex items-center gap-2 bg-primary-container rounded-md px-3 py-2 mb-3">
-              <span className="text-sm font-medium text-on-primary-container flex-1">
-                {GROUP_BY_OPTIONS.find(o => o.key === groupBy)?.label}
-              </span>
-              <button
-                onClick={() => setGroupBy(null)}
-                className="text-on-primary-container/70 hover:text-on-primary-container text-base leading-none"
-              >
-                ×
-              </button>
+        <CollapsibleSection label="קיבוץ לפי" badge={groupByKeys.length || undefined}>
+          {groupByKeys.length > 0 && (
+            <div className="space-y-1 mb-3">
+              {groupByKeys.map((key, idx) => {
+                const opt = GROUP_BY_OPTIONS.find(o => o.key === key)!
+                return (
+                  <div key={key} className="flex items-center gap-2 bg-primary-container rounded-md px-3 py-2">
+                    <span className="text-[10px] font-mono text-on-primary-container/50 w-4 shrink-0">{idx + 1}</span>
+                    <span className="text-sm font-medium text-on-primary-container flex-1">{opt.label}</span>
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <button onClick={() => moveGroupKey(idx, -1)} disabled={idx === 0}
+                        className="flex items-center justify-center w-6 h-6 rounded text-on-primary-container/70 hover:text-on-primary-container disabled:opacity-20 transition-colors">
+                        <ArrowUp />
+                      </button>
+                      <button onClick={() => moveGroupKey(idx, 1)} disabled={idx === groupByKeys.length - 1}
+                        className="flex items-center justify-center w-6 h-6 rounded text-on-primary-container/70 hover:text-on-primary-container disabled:opacity-20 transition-colors">
+                        <ArrowDown />
+                      </button>
+                      <button onClick={() => removeGroupKey(key)}
+                        className="flex items-center justify-center w-6 h-6 rounded text-on-primary-container/70 hover:text-on-primary-container transition-colors text-base leading-none">
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
-          {!groupBy && (
+          {available.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
-              {GROUP_BY_OPTIONS.map(opt => (
-                <button key={opt.key} onClick={() => setGroupBy(opt.key)}
+              {available.map(opt => (
+                <button key={opt.key} onClick={() => addGroupKey(opt.key)}
                   className="px-3 py-1.5 rounded-md text-sm font-medium bg-surface-high text-on-surface-variant hover:text-on-surface transition-colors">
                   + {opt.label}
                 </button>
               ))}
             </div>
+          )}
+          {available.length === 0 && groupByKeys.length > 0 && (
+            <p className="text-xs text-on-surface-variant font-mono text-right">כל השדות נבחרו</p>
           )}
         </CollapsibleSection>
       </FilterPane>
@@ -266,7 +383,7 @@ export function TransitionsScreen() {
                   <FilterIcon active={filterActive || hasGroupBy} />
                   {(filterActive || hasGroupBy) && (
                     <span className="absolute -top-0.5 -left-0.5 min-w-[16px] h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center px-0.5">
-                      {filterCount + (hasGroupBy ? 1 : 0)}
+                      {filterCount + groupByKeys.length}
                     </span>
                   )}
                 </button>
@@ -332,21 +449,25 @@ export function TransitionsScreen() {
                   <p className="text-sm text-on-surface-variant">אין פעולות</p>
                 </div>
               ) : (
-                <div className="space-y-4">
-                  {grouped.map(group => (
-                    <div key={group.key}>
-                      {groupBy && (
-                        <div className="text-xs font-bold text-on-surface-variant uppercase tracking-wider mb-2 text-right">
-                          {group.key} ({group.entries.length})
-                        </div>
-                      )}
-                      <div className="space-y-1.5">
-                        {group.entries.map((entry, i) => (
-                          <EntryRow key={`${entry.soldier.id}-${entry.types.join(',')}-${i}`} entry={entry} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                <div className="space-y-1.5">
+                  {visibleItems.map((item, idx) =>
+                    item.type === 'header' ? (
+                      <button
+                        key={`h-${item.path}`}
+                        onClick={() => groupByKeys.length > 0 && toggleExpanded(item.path)}
+                        className="w-full flex items-center gap-2 py-2 text-right"
+                        style={{ paddingRight: item.depth * 12 }}
+                      >
+                        <span className="text-on-surface-variant"><ChevronIcon open={item.isExpanded ?? true} /></span>
+                        <span className="text-xs font-bold text-on-surface-variant uppercase tracking-wider flex-1">
+                          {item.title}
+                        </span>
+                        <span className="text-xs font-mono text-on-surface-variant">{item.count}</span>
+                      </button>
+                    ) : (
+                      <EntryRow key={`${item.entry.soldier.id}-${item.entry.types.join(',')}-${idx}`} entry={item.entry} indent={item.depth} />
+                    )
+                  )}
                 </div>
               )}
             </div>

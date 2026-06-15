@@ -73,7 +73,7 @@ function applyTransitionFilter(entries: TransitionEntry[], filterState: FilterSt
 
 // ── Flat list for grouped rendering ───────────────────────────────────────
 
-type FlatHeader = { type: 'header'; title: string; depth: number; count: number; path: string }
+type FlatHeader = { type: 'header'; title: string; depth: number; count: number; path: string; isExpanded?: boolean }
 type FlatEntry  = { type: 'entry';  entry: TransitionEntry; depth: number }
 type FlatItem   = FlatHeader | FlatEntry
 
@@ -312,8 +312,8 @@ export function TransitionsScreen() {
   )
 
   const visibleItems = useMemo(
-    () => groupByKeys.length > 0 ? applyCollapse(flatItems, expanded) : flatItems,
-    [flatItems, expanded, groupByKeys.length]
+    () => applyCollapse(flatItems, expanded),
+    [flatItems, expanded]
   )
 
   const soldiers = useMemo(() => transitions.map(e => e.soldier), [transitions])

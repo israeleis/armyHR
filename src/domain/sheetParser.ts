@@ -136,6 +136,7 @@ export function parseSheet(rawValues: string[][]): ParseResult {
 
 function buildSchema(headerRow: string[], headerRowIdx: number, warnings: string[]): SheetSchema {
   const soldierColIndices = new Map<keyof Omit<SoldierFields, 'extra' | 'sourceRow'>, number>()
+  const soldierColHeaders = new Map<keyof Omit<SoldierFields, 'extra' | 'sourceRow'>, string>()
   const extraColIndices = new Map<string, number>()
   const dateColIndices = new Map<number, Date>()
 
@@ -147,6 +148,7 @@ function buildSchema(headerRow: string[], headerRowIdx: number, warnings: string
     if (canonicalField) {
       if (!soldierColIndices.has(canonicalField as keyof Omit<SoldierFields, 'extra' | 'sourceRow'>)) {
         soldierColIndices.set(canonicalField as keyof Omit<SoldierFields, 'extra' | 'sourceRow'>, c)
+        soldierColHeaders.set(canonicalField as keyof Omit<SoldierFields, 'extra' | 'sourceRow'>, raw.trim())
       }
       continue
     }
@@ -177,7 +179,7 @@ function buildSchema(headerRow: string[], headerRowIdx: number, warnings: string
     }
   }
 
-  return { soldierColIndices, extraColIndices, dateColIndices, headerRow: headerRowIdx }
+  return { soldierColIndices, soldierColHeaders, extraColIndices, dateColIndices, headerRow: headerRowIdx }
 }
 
 function extractSoldierFields(
@@ -227,6 +229,7 @@ function toDateKey(d: Date): string {
 function emptySchema(): SheetSchema {
   return {
     soldierColIndices: new Map(),
+    soldierColHeaders: new Map(),
     extraColIndices: new Map(),
     dateColIndices: new Map(),
     headerRow: 0,

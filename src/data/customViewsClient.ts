@@ -3,7 +3,7 @@ import { serializeFilterState, deserializeFilterState } from '@/features/filters
 import type { FilterState } from '@/features/filters'
 
 const TAB = '_app_custom_views'
-const HEADER = ['name', 'view', 'sheet_id', 'tab_name', 'filter_json', 'active', 'created_by', 'created_at']
+const HEADER = ['name', 'view', 'sheet_id', 'tab_name', 'filter_json', 'active', 'created_by', 'created_at', 'groupby_json']
 
 export interface SavedView {
   rowIndex: number   // 1-indexed sheet row (for updates)
@@ -12,6 +12,7 @@ export interface SavedView {
   sheetId: string
   tabName: string
   filterState: FilterState
+  groupByKeys: string[]
   active: boolean
   createdBy: string
   createdAt: string
@@ -28,7 +29,7 @@ export async function loadSavedViews(token: string, spreadsheetId: string): Prom
   return rows
     .slice(1) // skip header
     .map((row, i): SavedView | null => {
-      const [name, view, sheetId, tabName, filterJson, active, createdBy, createdAt] = row
+      const [name, view, sheetId, tabName, filterJson, active, createdBy, createdAt, groupByJson] = row
       if (!name || !view || !filterJson) return null
       try {
         return {
@@ -37,6 +38,7 @@ export async function loadSavedViews(token: string, spreadsheetId: string): Prom
           sheetId: sheetId ?? '',
           tabName: tabName ?? '',
           filterState: deserializeFilterState(filterJson),
+          groupByKeys: groupByJson ? JSON.parse(groupByJson) as string[] : [],
           active: active !== 'FALSE',
           createdBy: createdBy ?? '',
           createdAt: createdAt ?? '',
@@ -67,6 +69,7 @@ export async function saveView(
     'TRUE',
     view.createdBy,
     view.createdAt,
+    JSON.stringify(view.groupByKeys ?? []),
   ])
 }
 

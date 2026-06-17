@@ -25,6 +25,7 @@ export interface StatusEntry {
 
 export interface SheetSchema {
   soldierColIndices: Map<keyof Omit<SoldierFields, 'extra' | 'sourceRow'>, number>
+  soldierColHeaders: Map<keyof Omit<SoldierFields, 'extra' | 'sourceRow'>, string>  // original header text
   extraColIndices: Map<string, number>   // header → col index for unknown cols
   dateColIndices: Map<number, Date>      // col index → parsed Date
   headerRow: number   // index of the header row (usually 0)

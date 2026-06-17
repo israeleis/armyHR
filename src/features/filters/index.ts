@@ -63,7 +63,17 @@ function distinctValues(soldiers: SoldierFields[], getter: (s: SoldierFields) =>
   return [...new Set(soldiers.map(getter).filter((v): v is string => !!v))].sort()
 }
 
-export function buildFilterSections(soldiers: SoldierFields[]): FilterSection[] {
+const FIELD_DEFAULTS: Partial<Record<keyof SoldierFields, string>> = {
+  rank: 'דרגה', unit: 'יחידה', team: 'כיתה', role: 'תפקיד',
+}
+
+export function buildFilterSections(
+  soldiers: SoldierFields[],
+  colHeaders?: Map<string, string>,
+): FilterSection[] {
+  const label = (field: keyof SoldierFields) =>
+    colHeaders?.get(field) ?? FIELD_DEFAULTS[field] ?? String(field)
+
   const sections: FilterSection[] = []
 
   // Free-text: name
@@ -75,19 +85,13 @@ export function buildFilterSections(soldiers: SoldierFields[]): FilterSection[] 
   }
 
   // Known categorical fields
-  const known: Array<{ key: keyof SoldierFields; label: string }> = [
-    { key: 'rank', label: 'דרגה' },
-    { key: 'unit', label: 'יחידה' },
-    { key: 'team', label: 'כיתה' },
-    { key: 'role', label: 'תפקיד' },
-  ]
-  for (const { key, label } of known) {
+  for (const key of ['rank', 'unit', 'team', 'role'] as const) {
     const values = distinctValues(soldiers, s => s[key] as string | undefined)
     if (values.length === 0) continue
     sections.push(
       values.length <= MULTISELECT_THRESHOLD
-        ? { key, label, type: 'multiselect', options: values }
-        : { key, label, type: 'text' }
+        ? { key, label: label(key), type: 'multiselect', options: values }
+        : { key, label: label(key), type: 'text' }
     )
   }
 

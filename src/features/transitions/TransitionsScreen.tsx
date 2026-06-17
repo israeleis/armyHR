@@ -1,14 +1,17 @@
 // src/features/transitions/TransitionsScreen.tsx
-import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { format, startOfToday, isToday, addDays } from 'date-fns'
 import { he } from 'date-fns/locale'
 import { useTransitions } from './useTransitions'
+import { useDiaryData } from '@/features/diary/useDiaryData'
 import { getStatus } from '@/domain/statuses'
-import { FilterPane, CollapsibleSection } from '@/components/FilterPane'
+import { FilterPane } from '@/components/FilterPane'
 import { SaveViewDialog } from '@/components/SaveViewDialog'
 import { useSavedViews } from '@/hooks/useSavedViews'
 import { setActiveView } from '@/contexts/ActiveViewContext'
+import { useGroupBy, applyCollapse, type GroupByOption } from '@/features/filters/groupBy'
+import { GroupBySection } from '@/features/filters/GroupBySection'
 import {
   emptyFilterState, isFilterActive, activeFilterCount,
   buildFilterSections, applySoldierFilter,
@@ -32,7 +35,7 @@ const TRANSITION_TYPE_SECTION: FilterSection = {
 
 type GroupByKey = 'transitionType' | 'unit' | 'team' | 'role' | 'rank'
 
-const GROUP_BY_OPTIONS: Array<{ key: GroupByKey; label: string }> = [
+const GROUP_BY_DEFAULTS: Array<{ key: GroupByKey; label: string }> = [
   { key: 'transitionType', label: 'סוג'    },
   { key: 'unit',           label: 'יחידה'  },
   { key: 'team',           label: 'כיתה'   },
@@ -103,28 +106,6 @@ function buildFlatItems(
   return result
 }
 
-function applyCollapse(
-  items: FlatItem[],
-  expanded: Set<string>,
-): Array<FlatItem & { isExpanded?: boolean }> {
-  const result: Array<FlatItem & { isExpanded?: boolean }> = []
-  let collapsedDepth: number | null = null
-  for (const item of items) {
-    if (collapsedDepth !== null) {
-      if (item.type === 'header' && item.depth <= collapsedDepth) collapsedDepth = null
-      else continue
-    }
-    if (item.type === 'header') {
-      const isExpanded = expanded.has(item.path)
-      result.push({ ...item, isExpanded })
-      if (!isExpanded) collapsedDepth = item.depth
-    } else {
-      result.push(item)
-    }
-  }
-  return result
-}
-
 // ── Icons ──────────────────────────────────────────────────────────────────
 
 function FilterIcon({ active }: { active: boolean }) {
@@ -142,22 +123,6 @@ function ChevronIcon({ open }: { open: boolean }) {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
       strokeLinecap="round" strokeLinejoin="round"
       style={{ transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-      <polyline points="6 9 12 15 18 9"/>
-    </svg>
-  )
-}
-
-function ArrowUp() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="18 15 12 9 6 15"/>
-    </svg>
-  )
-}
-
-function ArrowDown() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="6 9 12 15 18 9"/>
     </svg>
   )
@@ -213,8 +178,7 @@ export function TransitionsScreen() {
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
   const [filterOpen, setFilterOpen] = useState(false)
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
-  const [groupByKeys, setGroupByKeys] = useState<GroupByKey[]>([])
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const { groupByKeys, setGroupByKeys, expanded, setExpanded, toggleExpanded, addGroupKey, removeGroupKey, moveGroupKey, reset: resetGroupBy } = useGroupBy<GroupByKey>()
   const carouselRef = useRef<HTMLDivElement>(null)
   const viewBaseRef = useRef<FilterState | null>(null)
   const location = useLocation()
@@ -222,13 +186,14 @@ export function TransitionsScreen() {
   const { saveView: persistView } = useSavedViews()
   const today = startOfToday()
 
-  // Apply pending filter when navigating from a saved view in the sidebar
+  // Apply pending filter + group-by when navigating from a saved view
   useEffect(() => {
-    const state = location.state as { pendingFilter?: FilterState; viewName?: string } | null
+    const state = location.state as { pendingFilter?: FilterState; pendingGroupBy?: string[]; viewName?: string } | null
     const pending = state?.pendingFilter
     if (!pending) return
     viewBaseRef.current = pending
     setFilterState(pending)
+    setGroupByKeys((state?.pendingGroupBy ?? []) as GroupByKey[])
     setActiveView(state?.viewName ?? null)
     navigate(location.pathname, { replace: true, state: null })
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,26 +205,6 @@ export function TransitionsScreen() {
     viewBaseRef.current = null
     setActiveView(null)
   }, [filterState])
-
-  useEffect(() => { setExpanded(new Set()) }, [groupByKeys])
-
-  const toggleExpanded = useCallback((path: string) => {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      next.has(path) ? next.delete(path) : next.add(path)
-      return next
-    })
-  }, [])
-
-  const addGroupKey    = useCallback((k: GroupByKey) => setGroupByKeys(p => [...p, k]), [])
-  const removeGroupKey = useCallback((k: GroupByKey) => setGroupByKeys(p => p.filter(x => x !== k)), [])
-  const moveGroupKey   = useCallback((idx: number, dir: -1 | 1) => setGroupByKeys(p => {
-    const next = [...p]
-    const to = idx + dir
-    if (to < 0 || to >= next.length) return p
-    ;[next[idx], next[to]] = [next[to], next[idx]]
-    return next
-  }), [])
 
   const effectiveDates = dates.length > 0
     ? dates
@@ -316,16 +261,23 @@ export function TransitionsScreen() {
     [flatItems, expanded]
   )
 
+  const { data } = useDiaryData()
+  const colHeaders = data?.schema.soldierColHeaders
   const soldiers = useMemo(() => transitions.map(e => e.soldier), [transitions])
   const filterSections = useMemo(
-    () => [TRANSITION_TYPE_SECTION, ...buildFilterSections(soldiers)],
-    [soldiers]
+    () => [TRANSITION_TYPE_SECTION, ...buildFilterSections(soldiers, colHeaders)],
+    [soldiers, colHeaders]
+  )
+  const groupByOptions = useMemo(
+    () => GROUP_BY_DEFAULTS.map(o =>
+      colHeaders?.get(o.key) ? { ...o, label: colHeaders.get(o.key)! } : o
+    ),
+    [colHeaders]
   )
 
   const filterActive = isFilterActive(filterState)
   const filterCount  = activeFilterCount(filterState)
   const hasGroupBy   = groupByKeys.length > 0
-  const available    = GROUP_BY_OPTIONS.filter(o => !groupByKeys.includes(o.key))
 
   const allHeaderPaths = useMemo(
     () => flatItems.filter(i => i.type === 'header').map(i => (i as { path: string }).path),
@@ -348,58 +300,23 @@ export function TransitionsScreen() {
         onMultiToggle={(key, value) => setFilterState(s => toggleMultiSelect(s, key, value))}
         onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
         onTextChange={(key, value) => setFilterState(s => setTextFilter(s, key, value))}
-        onClearAll={() => { setFilterState(emptyFilterState()); setGroupByKeys([]) }}
+        onClearAll={() => { setFilterState(emptyFilterState()); resetGroupBy() }}
         onSaveRequest={() => setSaveDialogOpen(true)}
       >
-        <CollapsibleSection label="קיבוץ לפי" badge={groupByKeys.length || undefined}>
-          {groupByKeys.length > 0 && (
-            <div className="space-y-1 mb-3">
-              {groupByKeys.map((key, idx) => {
-                const opt = GROUP_BY_OPTIONS.find(o => o.key === key)!
-                return (
-                  <div key={key} className="flex items-center gap-2 bg-primary-container rounded-md px-3 py-2">
-                    <span className="text-[10px] font-mono text-on-primary-container/50 w-4 shrink-0">{idx + 1}</span>
-                    <span className="text-sm font-medium text-on-primary-container flex-1">{opt.label}</span>
-                    <div className="flex items-center gap-0.5 shrink-0">
-                      <button onClick={() => moveGroupKey(idx, -1)} disabled={idx === 0}
-                        className="flex items-center justify-center w-6 h-6 rounded text-on-primary-container/70 hover:text-on-primary-container disabled:opacity-20 transition-colors">
-                        <ArrowUp />
-                      </button>
-                      <button onClick={() => moveGroupKey(idx, 1)} disabled={idx === groupByKeys.length - 1}
-                        className="flex items-center justify-center w-6 h-6 rounded text-on-primary-container/70 hover:text-on-primary-container disabled:opacity-20 transition-colors">
-                        <ArrowDown />
-                      </button>
-                      <button onClick={() => removeGroupKey(key)}
-                        className="flex items-center justify-center w-6 h-6 rounded text-on-primary-container/70 hover:text-on-primary-container transition-colors text-base leading-none">
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-          {available.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {available.map(opt => (
-                <button key={opt.key} onClick={() => addGroupKey(opt.key)}
-                  className="px-3 py-1.5 rounded-md text-sm font-medium bg-surface-high text-on-surface-variant hover:text-on-surface transition-colors">
-                  + {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {available.length === 0 && groupByKeys.length > 0 && (
-            <p className="text-xs text-on-surface-variant font-mono text-right">כל השדות נבחרו</p>
-          )}
-        </CollapsibleSection>
+        <GroupBySection
+          options={groupByOptions}
+          groupByKeys={groupByKeys}
+          onAdd={addGroupKey}
+          onRemove={removeGroupKey}
+          onMove={moveGroupKey}
+        />
       </FilterPane>
 
       <SaveViewDialog
         open={saveDialogOpen}
         onClose={() => setSaveDialogOpen(false)}
         onSave={async name => {
-          await persistView({ name, view: '/transitions', filterState })
+          await persistView({ name, view: '/transitions', filterState, groupByKeys })
           viewBaseRef.current = filterState
           setActiveView(name)
         }}

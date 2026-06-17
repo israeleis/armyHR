@@ -202,7 +202,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       }`}
                       onClick={() => {
                         setActiveView(view.name)
-                        navigate(view.view, { state: { pendingFilter: view.filterState as FilterState, viewName: view.name } })
+                        navigate(view.view, { state: { pendingFilter: view.filterState as FilterState, pendingGroupBy: view.groupByKeys, viewName: view.name } })
                         onClose()
                       }}
                     >

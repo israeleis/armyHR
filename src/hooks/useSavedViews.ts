@@ -18,13 +18,14 @@ export function useSavedViews() {
   })
 
   const saveMutation = useMutation({
-    mutationFn: ({ name, view, filterState }: { name: string; view: string; filterState: FilterState }) =>
+    mutationFn: ({ name, view, filterState, groupByKeys = [] }: { name: string; view: string; filterState: FilterState; groupByKeys?: string[] }) =>
       saveView(token!, sheet!.id, {
         name,
         view,
         sheetId: sheet!.id,
         tabName: sheet!.tabName,
         filterState,
+        groupByKeys,
         active: true,
         createdBy: userEmail ?? '',
         createdAt: new Date().toISOString(),

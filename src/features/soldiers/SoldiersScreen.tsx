@@ -163,7 +163,7 @@ export function SoldiersScreen() {
   )
   const groupByOptions = useMemo(
     () => GROUP_BY_DEFAULTS.map(o =>
-      colHeaders?.get(o.key) ? { ...o, label: colHeaders.get(o.key)! } : o
+      colHeaders?.get(o.key as never) ? { ...o, label: colHeaders.get(o.key as never)! } : o
     ),
     [colHeaders]
   )

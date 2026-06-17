@@ -10,7 +10,7 @@ import { FilterPane } from '@/components/FilterPane'
 import { SaveViewDialog } from '@/components/SaveViewDialog'
 import { useSavedViews } from '@/hooks/useSavedViews'
 import { setActiveView } from '@/contexts/ActiveViewContext'
-import { useGroupBy, applyCollapse, type GroupByOption } from '@/features/filters/groupBy'
+import { useGroupBy, applyCollapse } from '@/features/filters/groupBy'
 import { GroupBySection } from '@/features/filters/GroupBySection'
 import {
   emptyFilterState, isFilterActive, activeFilterCount,
@@ -270,7 +270,7 @@ export function TransitionsScreen() {
   )
   const groupByOptions = useMemo(
     () => GROUP_BY_DEFAULTS.map(o =>
-      colHeaders?.get(o.key) ? { ...o, label: colHeaders.get(o.key)! } : o
+      colHeaders?.get(o.key as never) ? { ...o, label: colHeaders.get(o.key as never)! } : o
     ),
     [colHeaders]
   )

@@ -17,6 +17,8 @@ export interface QueuedWrite {
   oldValue: string
   newValue: string
   note?: string         // optional cell note to write after the value
+  soldierName: string   // display name for the queue panel
+  dateKey: string       // YYYY-MM-DD of the diary entry
   createdAt: number     // Date.now()
   attempts: number
   lastAttemptAt?: number
@@ -42,6 +44,11 @@ export class ArmyHrDb extends Dexie {
   constructor() {
     super('army-hr')
     this.version(1).stores({
+      snapshots: '++id, [spreadsheetId+sheetName], fetchedAt',
+      writeQueue: '++id, spreadsheetId, createdAt',
+      conflicts: '++id, spreadsheetId, detectedAt',
+    })
+    this.version(2).stores({
       snapshots: '++id, [spreadsheetId+sheetName], fetchedAt',
       writeQueue: '++id, spreadsheetId, createdAt',
       conflicts: '++id, spreadsheetId, detectedAt',

@@ -264,7 +264,7 @@ export function DailyDetailScreen() {
       const updated = applyWriteToSnapshot(snap.rawValues, entry.sourceCell.row, entry.sourceCell.col, newCode)
       await saveSnapshot(sheet.id, sheetName, updated)
     }
-    await enqueueWrite({ spreadsheetId: sheet.id, sheetName, row: entry.sourceCell.row, col: entry.sourceCell.col, oldValue: oldCode, newValue: newCode })
+    await enqueueWrite({ spreadsheetId: sheet.id, sheetName, row: entry.sourceCell.row, col: entry.sourceCell.col, oldValue: oldCode, newValue: newCode, soldierName: editingCell?.soldierName ?? '', dateKey: entry.dateKey })
     setEditingCell(null)
   }
 

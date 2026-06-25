@@ -125,7 +125,7 @@ function CooldownLabel({ until }: { until: number }) {
       setSecs(Math.max(0, Math.ceil((until - Date.now()) / 1000)))
     }, 500)
     return () => clearInterval(t)
-  }, [until, secs])
+  }, [until])
   if (secs <= 0) return null
   return <span className="text-[9px] font-mono text-on-surface-variant ml-0.5">{secs}s</span>
 }
@@ -146,7 +146,7 @@ function QueueRow({ item }: { item: QueueItem }) {
         <button
           disabled={isCooldown}
           onClick={() => retryItem(item.id)}
-          className="flex items-center gap-0.5 disabled:cursor-not-allowed"
+          className="flex items-center gap-0.5 disabled:cursor-not-allowed disabled:opacity-60"
           title={isCooldown ? 'ממתין לפני ניסיון חוזר' : 'נסה שוב'}
         >
           <RetryIcon color={isCooldown ? 'var(--color-on-surface-variant)' : 'var(--color-primary)'} />
@@ -180,18 +180,17 @@ function QueueRow({ item }: { item: QueueItem }) {
       </span>
 
       {/* Cancel button */}
-      {!isCancelled && item.status !== 'sending' && (
-        <button
-          onClick={() => cancelItem(item.id)}
-          className="shrink-0 text-on-surface-variant hover:text-on-surface transition-colors p-0.5"
-          title="בטל"
-          aria-label="בטל שינוי"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
-      )}
+      <button
+        onClick={() => cancelItem(item.id)}
+        disabled={isCancelled || item.status === 'sending'}
+        className="shrink-0 text-on-surface-variant hover:text-on-surface transition-colors p-0.5 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-on-surface-variant"
+        title="בטל"
+        aria-label="בטל שינוי"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
     </li>
   )
 }
@@ -249,7 +248,7 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
   const hasItems = sync.items.length > 0
 
   // Chip is visible whenever there are items in the panel
-  const showChip = hasItems || pending > 0
+  const showChip = hasItems
 
   const chipLabel = pending > 0
     ? (pending > 99 ? '99+' : String(pending))

@@ -161,6 +161,8 @@ export function SoldierScreen() {
         oldValue: oldCode,
         newValue: newCode,
         note,
+        soldierName: soldier?.name ?? '',
+        dateKey: entry.dateKey,
       })
       await refreshPendingCount()
     } catch (err) {

@@ -17,9 +17,9 @@ vi.mock('../db', () => ({
       where: (field: string) => ({
         equals: (val: unknown) => ({
           sortBy: async (_key: string) =>
-            store.filter((r) => (r as Record<string, unknown>)[field] === val),
+            store.filter((r) => (r as unknown as Record<string, unknown>)[field] === val),
           count: async () =>
-            store.filter((r) => (r as Record<string, unknown>)[field] === val).length,
+            store.filter((r) => (r as unknown as Record<string, unknown>)[field] === val).length,
         }),
       }),
     },

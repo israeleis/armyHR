@@ -7,6 +7,7 @@ export function OfflineBadge() {
     pendingCount: 0,
     lastSyncAt: null,
     lastError: null,
+    items: [],
   })
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 

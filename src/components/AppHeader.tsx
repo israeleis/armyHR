@@ -84,7 +84,7 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
   const { name: activeViewName } = useActiveView()
   const queryClient = useQueryClient()
 
-  const [sync, setSync] = useState<SyncState>({ status: 'idle', pendingCount: 0, lastSyncAt: null, lastError: null })
+  const [sync, setSync] = useState<SyncState>({ status: 'idle', pendingCount: 0, lastSyncAt: null, lastError: null, items: [] })
   const [isOnline, setIsOnline] = useState(navigator.onLine)
 
   useEffect(() => {

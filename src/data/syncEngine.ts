@@ -147,6 +147,7 @@ export function retryItem(id: number): void {
   if (!item) return
   if (item.cooldownUntil && Date.now() < item.cooldownUntil) return
   setItemStatus(id, 'pending', { cooldownUntil: undefined })
+  db.writeQueue.update(id, { attempts: 0 }).catch(() => {})
   drainQueue().catch(console.error)
 }
 

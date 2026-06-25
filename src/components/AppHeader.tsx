@@ -180,6 +180,7 @@ function QueueRow({ item }: { item: QueueItem }) {
       </span>
 
       {/* Cancel button */}
+      {/* verified items remain cancellable — they auto-fade in 8s but the user can undo before that */}
       <button
         onClick={() => cancelItem(item.id)}
         disabled={isCancelled || item.status === 'sending'}

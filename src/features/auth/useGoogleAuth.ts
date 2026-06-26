@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth, getStoredEmail } from '@/contexts/AuthContext'
 
 declare global {
   interface Window {
@@ -96,8 +96,9 @@ export function useGoogleAuth() {
         callback: async (response) => {
           clearTimeout(timer)
           if (response.access_token) {
-            // Don't re-fetch email on silent refresh — we already have it stored
-            setToken(response.access_token, response.expires_in ?? DEFAULT_EXPIRES_IN)
+            // Fetch email if not already stored (e.g. if initial sign-in email fetch failed)
+            const email = getStoredEmail() ?? await fetchEmail(response.access_token)
+            setToken(response.access_token, response.expires_in ?? DEFAULT_EXPIRES_IN, email ?? undefined)
             resolve(true)
           } else {
             resolve(false)

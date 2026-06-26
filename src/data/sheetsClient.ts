@@ -132,7 +132,7 @@ export async function setCellNote(
   note: string,
 ): Promise<void> {
   const sheetId = await getSheetIdByName(token, spreadsheetId, sheetName)
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/batchUpdate`
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`
   const res = await fetch(url, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createHashRouter, Outlet, Navigate } from 'react-router-dom'
 import { AppHeader } from '@/components/AppHeader'
 import { Sidebar } from '@/components/Sidebar'
@@ -46,8 +46,8 @@ function AppLayout() {
   })
 
   // Start sync engine once
-  const tokenRef = { current: token }
-  tokenRef.current = token
+  const tokenRef = useRef(token)
+  tokenRef.current = token   // keep in sync on every render
   useEffect(() => {
     return initSyncEngine(() => tokenRef.current)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -57,9 +57,18 @@ function AppLayout() {
   useEffect(() => {
     if (authReady !== null) return
     // authReady is null only when: !isSignedIn && userEmail && navigator.onLine
-    silentRefresh(userEmail!).then(ok => setAuthReady(ok ? true : false))
+    silentRefresh(userEmail!).then(ok =>
+      setAuthReady(ok || !navigator.onLine ? true : false)
+    )
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Re-fetch token when cleared mid-session (e.g. 401 handled by clearToken in useDiaryData)
+  useEffect(() => {
+    if (authReady !== true || isSignedIn || !navigator.onLine || !userEmail) return
+    silentRefresh(userEmail).catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn])
 
   if (authReady === null) {
     return (

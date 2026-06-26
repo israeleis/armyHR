@@ -297,8 +297,10 @@ export function AppHeader({ sidebarOpen, onToggleSidebar }: AppHeaderProps) {
               title="פתח תור עדכונים"
             >
               {isFetching && <SpinnerIcon color="currentColor" />}
-              {chipLabel && <span>{chipLabel}</span>}
-              {!chipLabel && !isFetching && <DoubleCheck color="currentColor" />}
+              {chipLabel
+                ? <span>{chipLabel}</span>
+                : !isFetching && <span className="text-[10px]">✓</span>
+              }
             </button>
           ) : (
             <button

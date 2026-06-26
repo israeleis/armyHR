@@ -17,6 +17,7 @@ export interface AuthState {
   isSignedIn: boolean
   signIn: () => void
   signOut: () => void
+  clearToken: () => void
   setToken: (token: string, expiresIn: number, email?: string) => void
 }
 
@@ -43,6 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserEmail(null)
   }
 
+  const clearToken = () => {
+    localStorage.removeItem(TOKEN_KEY)
+    localStorage.removeItem(EXPIRY_KEY)
+    setTokenState(null)
+    // email is intentionally kept — silent refresh needs it on next load
+  }
+
   const setToken = (t: string, expiresIn: number, email?: string) => {
     const expiry = Date.now() + expiresIn * 1000
     localStorage.setItem(TOKEN_KEY, t)
@@ -55,7 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ token, userEmail, isSignedIn: !!token, signIn, signOut, setToken }}>
+    <AuthContext.Provider value={{ token, userEmail, isSignedIn: !!token, signIn, signOut, clearToken, setToken }}>
       {children}
     </AuthContext.Provider>
   )

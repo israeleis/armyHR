@@ -23,24 +23,24 @@ async function fetchAndCacheSheet(token: string | null, spreadsheetId: string, t
 }
 
 export function useDiaryData() {
-  const { token, signOut } = useAuth()
+  const { token, clearToken } = useAuth()
   const sheet = getSelectedSheet()
 
   const query = useQuery({
     queryKey: ['diary', sheet?.id, sheet?.tabName, token],
     queryFn: () => fetchAndCacheSheet(token, sheet!.id, sheet!.tabName),
-    // Run when sheet is selected — even without a token (offline cache fallback)
     enabled: !!sheet,
     staleTime: 1000 * 60 * 5,
     retry: false,
   })
 
-  // Token expired → clear session and redirect to sign-in
+  // Token rejected by server → clear token but keep email so silent refresh
+  // can be attempted on the next app load.
   useEffect(() => {
     if (query.error && String(query.error).includes('401')) {
-      signOut()
+      clearToken()
     }
-  }, [query.error, signOut])
+  }, [query.error, clearToken])
 
   return query
 }

@@ -16,6 +16,19 @@ import { SoldiersScreen } from '@/features/soldiers/SoldiersScreen'
 import { ImportScreen } from '@/features/import/ImportScreen'
 import { TransitionsScreen } from '@/features/transitions/TransitionsScreen'
 
+function useIsOnline() {
+  const [online, setOnline] = useState(navigator.onLine)
+  useEffect(() => {
+    const on  = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online',  on)
+    window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [])
+  return online
+}
+void useIsOnline // keep unused function per spec
+
 function AppLayout() {
   const { isSignedIn, token, userEmail } = useAuth()
   const { silentRefresh } = useGoogleAuth()

@@ -16,29 +16,23 @@ import { SoldiersScreen } from '@/features/soldiers/SoldiersScreen'
 import { ImportScreen } from '@/features/import/ImportScreen'
 import { TransitionsScreen } from '@/features/transitions/TransitionsScreen'
 
-function useIsOnline() {
-  const [online, setOnline] = useState(navigator.onLine)
-  useEffect(() => {
-    const on  = () => setOnline(true)
-    const off = () => setOnline(false)
-    window.addEventListener('online',  on)
-    window.addEventListener('offline', off)
-    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
-  }, [])
-  return online
-}
-
 function AppLayout() {
   const { isSignedIn, token, userEmail } = useAuth()
   const { silentRefresh } = useGoogleAuth()
-  const isOnline = useIsOnline()
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  // null = still checking, true = gave up (redirect to signin), false = ok
-  const [refreshFailed, setRefreshFailed] = useState<boolean | null>(
-    isSignedIn ? false : null
-  )
 
-  // Start sync engine once — provides a stable token getter so it always uses the latest token
+  // Compute initial auth readiness synchronously where possible:
+  //   true  = enter app now
+  //   false = send to /signin now
+  //   null  = waiting for silentRefresh (async)
+  const [authReady, setAuthReady] = useState<boolean | null>(() => {
+    if (isSignedIn)            return true   // fresh token
+    if (!userEmail)            return false  // never signed in / explicit sign-out
+    if (!navigator.onLine)     return true   // offline — use cached data
+    return null                              // has email + online: try silentRefresh
+  })
+
+  // Start sync engine once
   const tokenRef = { current: token }
   tokenRef.current = token
   useEffect(() => {
@@ -46,17 +40,15 @@ function AppLayout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Attempt silent refresh when needed (only fires when authReady starts as null)
   useEffect(() => {
-    if (isSignedIn) { setRefreshFailed(false); return }
-    if (!isOnline)  { setRefreshFailed(false); return }
-    if (!userEmail) { setRefreshFailed(true);  return }
-
-    // Token expired but we know the user's email — try a silent GIS grant
-    silentRefresh(userEmail).then(ok => setRefreshFailed(!ok))
+    if (authReady !== null) return
+    // authReady is null only when: !isSignedIn && userEmail && navigator.onLine
+    silentRefresh(userEmail!).then(ok => setAuthReady(ok ? true : false))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  if (refreshFailed === null) {
+  if (authReady === null) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-on-surface-variant font-mono text-sm">מתחבר...</div>
@@ -64,7 +56,7 @@ function AppLayout() {
     )
   }
 
-  if (isOnline && !isSignedIn) return <Navigate to="/signin" replace />
+  if (authReady === false) return <Navigate to="/signin" replace />
 
   return (
     <ActiveViewProvider>
@@ -90,14 +82,14 @@ export const router = createHashRouter([
     path: '/',
     element: <AppLayout />,
     children: [
-      { path: 'trends', element: <TrendsScreen /> },
-      { path: 'soldiers', element: <SoldiersScreen /> },
-      { path: 'transitions', element: <TransitionsScreen /> },
-      { path: 'diary', element: <DiaryScreen /> },
-      { path: 'diary/:date', element: <DailyDetailScreen /> },
-      { path: 'soldier/:id', element: <SoldierScreen /> },
-      { path: 'import', element: <ImportScreen /> },
-      { path: '*', element: <Navigate to="/trends" replace /> },
+      { path: 'trends',       element: <TrendsScreen /> },
+      { path: 'soldiers',     element: <SoldiersScreen /> },
+      { path: 'transitions',  element: <TransitionsScreen /> },
+      { path: 'diary',        element: <DiaryScreen /> },
+      { path: 'diary/:date',  element: <DailyDetailScreen /> },
+      { path: 'soldier/:id',  element: <SoldierScreen /> },
+      { path: 'import',       element: <ImportScreen /> },
+      { path: '*',            element: <Navigate to="/trends" replace /> },
     ],
   },
 ])

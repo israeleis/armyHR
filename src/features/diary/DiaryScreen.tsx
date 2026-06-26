@@ -5,10 +5,26 @@ import { he } from 'date-fns/locale'
 import { PieChart, Pie, Cell } from 'recharts'
 import { useDiaryData } from './useDiaryData'
 import { StatusBadge } from '@/components/StatusBadge'
+import { FilterPane } from '@/components/FilterPane'
 import { useAuth } from '@/contexts/AuthContext'
+import {
+  emptyFilterState, isFilterActive, activeFilterCount,
+  buildFilterSections, applySoldierFilter,
+  toggleMultiSelect, clearMultiKey, setTextFilter,
+  type FilterState,
+} from '@/features/filters'
 
 function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function FilterIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      style={{ color: active ? 'var(--color-primary)' : 'var(--color-on-surface-variant)' }}>
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  )
 }
 
 const SUMMARY_GROUPS = [
@@ -22,7 +38,8 @@ export function DiaryScreen() {
   const { isSignedIn } = useAuth()
   const { data, isLoading, error } = useDiaryData()
   const navigate = useNavigate()
-  const [selectedUnit, setSelectedUnit] = useState<string>('הכל')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null)
   const carouselRef = useRef<HTMLDivElement>(null)
   const today = startOfToday()
@@ -45,16 +62,12 @@ export function DiaryScreen() {
 
   const activeDateKey = toDateKey(activeDate)
 
-  const units = useMemo(() => {
-    if (!data) return []
-    return ['הכל', ...new Set(data.soldiers.map(s => s.unit).filter(Boolean) as string[])]
-  }, [data])
+  const filterSections = useMemo(() => buildFilterSections(data?.soldiers ?? []), [data?.soldiers])
 
   const filteredSoldiers = useMemo(() => {
     if (!data) return []
-    if (selectedUnit === 'הכל') return data.soldiers
-    return data.soldiers.filter(s => s.unit === selectedUnit)
-  }, [data, selectedUnit])
+    return applySoldierFilter(data.soldiers, filterState)
+  }, [data, filterState])
 
   const filteredIds = useMemo(() => new Set(filteredSoldiers.map(s => s.id)), [filteredSoldiers])
 
@@ -107,25 +120,38 @@ export function DiaryScreen() {
     )
   }
 
+  const filterActive = isFilterActive(filterState)
+  const filterCount  = activeFilterCount(filterState)
+
   return (
+    <>
+    <FilterPane
+      open={filterOpen}
+      onClose={() => setFilterOpen(false)}
+      sections={filterSections}
+      multiSelect={filterState.multiSelect}
+      text={filterState.text}
+      onMultiToggle={(key, val) => setFilterState(s => toggleMultiSelect(s, key, val))}
+      onMultiClear={key => setFilterState(s => clearMultiKey(s, key))}
+      onTextChange={(key, val) => setFilterState(s => setTextFilter(s, key, val))}
+      onClearAll={() => setFilterState(emptyFilterState())}
+    />
     <div dir="rtl" className="flex flex-col flex-1 overflow-hidden bg-background">
-      {/* Unit filter tabs */}
-      {units.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto px-4 py-2 border-b border-outline-variant no-scrollbar">
-          {units.map(unit => (
-            <button
-              key={unit}
-              onClick={() => setSelectedUnit(unit)}
-              className={`shrink-0 px-3 py-1 rounded-full text-sm font-bold transition-colors
-                ${selectedUnit === unit
-                  ? 'bg-primary-container text-on-primary-container'
-                  : 'bg-surface-high text-on-surface-variant'}`}
-            >
-              {unit}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Toolbar */}
+      <div className="px-4 py-3 flex items-center justify-end">
+        <button
+          onClick={() => setFilterOpen(true)}
+          className="relative flex items-center justify-center w-[44px] h-[44px] rounded-md hover:bg-surface-high transition-colors"
+          aria-label="פתח סינון"
+        >
+          <FilterIcon active={filterActive} />
+          {filterActive && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 rounded-full bg-primary text-on-primary text-[9px] font-bold flex items-center justify-center px-0.5">
+              {filterCount}
+            </span>
+          )}
+        </button>
+      </div>
 
       {isLoading && (
         <div className="flex-1 flex items-center justify-center text-on-surface-variant font-mono text-sm">
@@ -334,5 +360,6 @@ export function DiaryScreen() {
         +
       </button>
     </div>
+    </>
   )
 }

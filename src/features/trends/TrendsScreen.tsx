@@ -20,15 +20,6 @@ import {
 import { useSavedViews } from '@/hooks/useSavedViews'
 import { setActiveView, clearActiveView } from '@/contexts/ActiveViewContext'
 
-const TIME_TABS = ['שבועי', 'חודשי', 'כל הזמן'] as const
-type TimeTab = typeof TIME_TABS[number]
-
-const PERIOD_DAYS: Record<TimeTab, number | null> = {
-  'שבועי': 7,
-  'חודשי': 30,
-  'כל הזמן': null,
-}
-
 const STATUS_COLORS: Record<string, string> = {
   'נ': '#c3cc8c',
 }
@@ -49,137 +40,100 @@ function FilterIcon({ active }: { active: boolean }) {
   )
 }
 
-// ── Period tab selector ────────────────────────────────────────────────────
-
-function PeriodTabs({ value, onChange }: { value: TimeTab; onChange: (t: TimeTab) => void }) {
-  const n = TIME_TABS.length
-  const activeIdx = TIME_TABS.indexOf(value)
-  const pillLeftPct = ((n - 1 - activeIdx) / (n - 1)) * (100 - 100 / n)
-
-  return (
-    <div className="relative flex bg-surface-high rounded-lg p-1" dir="rtl">
-      <div
-        className="absolute inset-y-1 rounded-md bg-primary-container pointer-events-none"
-        style={{
-          width: `calc(${100 / n}% - 8px)`,
-          left: `calc(${pillLeftPct}% + 4px)`,
-          transition: 'left 150ms ease',
-        }}
-      />
-      {TIME_TABS.map(tab => (
-        <button
-          key={tab}
-          onClick={() => onChange(tab)}
-          className={`relative flex-1 text-sm py-2.5 text-center font-bold z-10 select-none transition-colors duration-150 ${
-            tab === value ? 'text-on-primary-container' : 'text-on-surface-variant'
-          }`}
-        >
-          {tab}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// ── Draggable time range slider (two handles) ─────────────────────────────
+// ── Time range slider (pan-only, day-count pills) ─────────────────────────
 
 const DAY_MS = 24 * 60 * 60 * 1000
 
+const DAY_OPTIONS: { label: string; days: number | null }[] = [
+  { label: '7', days: 7 },
+  { label: '14', days: 14 },
+  { label: 'חודש', days: 30 },
+  { label: 'הכל', days: null },
+]
+
 function TimeRangeSlider({
-  minMs, maxMs, startMs, endMs, onStartChange, onEndChange,
+  minMs, maxMs, endMs, days, onEndChange, onDaysChange,
 }: {
   minMs: number; maxMs: number
-  startMs: number; endMs: number
-  onStartChange: (ms: number) => void
+  endMs: number
+  days: number | null
   onEndChange: (ms: number) => void
+  onDaysChange: (d: number | null) => void
 }) {
   const trackRef = useRef<HTMLDivElement>(null)
-  const drag = useRef<{
-    mode: 'start' | 'end' | 'pan'
-    originX: number
-    originStartMs: number
-    originEndMs: number
-  } | null>(null)
+  const drag = useRef<{ originX: number; originEndMs: number } | null>(null)
 
   const totalMs = maxMs - minMs
   if (totalMs <= 0) return null
 
+  const spanMs = days !== null ? days * DAY_MS : totalMs
+  const startMs = Math.max(minMs, endMs - spanMs)
   const startPct = ((startMs - minMs) / totalMs) * 100
   const endPct   = ((endMs   - minMs) / totalMs) * 100
-  const days = Math.max(1, Math.round((endMs - startMs) / DAY_MS))
+  const displayDays = Math.max(1, Math.round((endMs - startMs) / DAY_MS))
 
   function msPerPx() {
     return trackRef.current ? totalMs / trackRef.current.getBoundingClientRect().width : 0
   }
 
-  function onDown(mode: 'start' | 'end' | 'pan') {
-    return (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault()
-      e.stopPropagation()
-      ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
-      drag.current = { mode, originX: e.clientX, originStartMs: startMs, originEndMs: endMs }
-    }
+  function onDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (days === null) return
+    e.preventDefault()
+    e.stopPropagation()
+    ;(e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId)
+    drag.current = { originX: e.clientX, originEndMs: endMs }
   }
 
   function onMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!drag.current) return
     const delta = (e.clientX - drag.current.originX) * msPerPx()
-    const { mode, originStartMs, originEndMs } = drag.current
-    const spanMs = originEndMs - originStartMs
-
-    if (mode === 'start') {
-      onStartChange(Math.max(minMs, Math.min(originEndMs - DAY_MS, originStartMs + delta)))
-    } else if (mode === 'end') {
-      onEndChange(Math.min(maxMs, Math.max(originStartMs + DAY_MS, originEndMs + delta)))
-    } else {
-      // pan: move both handles, preserve span
-      const newStart = Math.max(minMs, Math.min(maxMs - spanMs, originStartMs + delta))
-      onStartChange(newStart)
-      onEndChange(newStart + spanMs)
-    }
+    const newEnd = Math.min(maxMs, Math.max(minMs + spanMs, drag.current.originEndMs + delta))
+    onEndChange(newEnd)
   }
 
   function onUp() { drag.current = null }
 
   return (
-    <div className="px-1 py-1" dir="ltr">
+    <div className="px-1 py-1" dir="rtl">
+      {/* Day-count pills */}
+      <div className="flex gap-1 mb-2">
+        {DAY_OPTIONS.map(opt => (
+          <button
+            key={opt.label}
+            onClick={() => onDaysChange(opt.days)}
+            className={`px-2.5 py-0.5 rounded text-xs font-mono font-bold transition-colors ${
+              days === opt.days
+                ? 'bg-primary text-on-primary'
+                : 'bg-surface-container text-on-surface-variant hover:bg-surface-high'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Track */}
       <div
         ref={trackRef}
+        dir="ltr"
         className="relative h-8 flex items-center select-none"
         onPointerMove={onMove}
         onPointerUp={onUp}
         onPointerLeave={onUp}
       >
-        {/* Track */}
         <div className="absolute inset-x-0 h-1.5 bg-surface-container rounded-full" />
-
-        {/* Selection fill — dragging pans the window */}
         <div
-          className="absolute h-6 rounded-full bg-primary/20 cursor-grab active:cursor-grabbing touch-none"
+          className={`absolute h-6 rounded-full bg-primary/20 touch-none ${days !== null ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
           style={{ left: `${startPct}%`, width: `${endPct - startPct}%` }}
-          onPointerDown={onDown('pan')}
-        />
-
-        {/* Start handle */}
-        <div
-          className="absolute w-5 h-5 rounded-full bg-primary border-2 border-surface-high shadow-md cursor-grab active:cursor-grabbing touch-none z-10"
-          style={{ left: `calc(${startPct}% - 10px)` }}
-          onPointerDown={onDown('start')}
-        />
-
-        {/* End handle */}
-        <div
-          className="absolute w-5 h-5 rounded-full bg-primary border-2 border-surface-high shadow-md cursor-grab active:cursor-grabbing touch-none z-10"
-          style={{ left: `calc(${endPct}% - 10px)` }}
-          onPointerDown={onDown('end')}
+          onPointerDown={onDown}
         />
       </div>
 
       {/* Labels */}
-      <div className="flex justify-between text-[10px] font-mono text-on-surface-variant -mt-0.5">
+      <div dir="ltr" className="flex justify-between text-[10px] font-mono text-on-surface-variant -mt-0.5">
         <span>{format(new Date(minMs), 'dd/MM/yy')}</span>
         <span className="text-primary font-bold">
-          {format(new Date(startMs), 'dd/MM')} – {format(new Date(endMs), 'dd/MM')} · {days}י
+          {format(new Date(startMs), 'dd/MM')} – {format(new Date(endMs), 'dd/MM')} · {displayDays}י
         </span>
         <span>{format(new Date(maxMs), 'dd/MM/yy')}</span>
       </div>
@@ -265,14 +219,13 @@ export function TrendsScreen() {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [activeTab, setActiveTab] = useState<TimeTab>('שבועי')
+  const [selectedDays, setSelectedDays] = useState<number | null>(7)
+  const [windowEndMs, setWindowEndMs] = useState<number | null>(null)
   const [filterOpen, setFilterOpen] = useState(false)
   const [filterState, setFilterState] = useState<FilterState>(emptyFilterState())
   const [saveDialogOpen, setSaveDialogOpen] = useState(false)
   const { saveView: persistView } = useSavedViews()
   const viewBaseRef = useRef<FilterState | null>(null)
-  const [windowStartMs, setWindowStartMs] = useState<number | null>(null)
-  const [windowEndMs, setWindowEndMs] = useState<number | null>(null)
   const [activeDate, setActiveDate] = useState<ActiveDate | null>(null)
   const iconHoveredRef = useRef(false)
   const hideDateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -306,17 +259,6 @@ export function TrendsScreen() {
     }
   }, [data])
 
-  // Reset window to tab defaults when tab changes (read current data range via ref)
-  const dateRangeRef = useRef({ minMs: 0, maxMs: 0 })
-  dateRangeRef.current = { minMs, maxMs }
-
-  useEffect(() => {
-    const { minMs, maxMs } = dateRangeRef.current
-    const days = PERIOD_DAYS[activeTab]
-    setWindowEndMs(maxMs || null)
-    setWindowStartMs(days !== null && maxMs ? Math.max(minMs, maxMs - days * DAY_MS) : null)
-  }, [activeTab])
-
   // Apply pending filter from sidebar navigation (also fires when re-navigating to same route)
   useEffect(() => {
     const state = location.state as { pendingFilter?: FilterState; viewName?: string } | null
@@ -347,13 +289,16 @@ export function TrendsScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Derive effective window (null → data extremes)
-  const effectiveEndMs   = windowEndMs   ?? maxMs
-  const effectiveStartMs = windowStartMs ?? (
-    PERIOD_DAYS[activeTab] !== null
-      ? Math.max(minMs, maxMs - (PERIOD_DAYS[activeTab]! * DAY_MS))
-      : minMs
-  )
+  function handleDaysChange(days: number | null) {
+    setSelectedDays(days)
+    setWindowEndMs(null) // reset to latest data point
+  }
+
+  // Derive effective window
+  const effectiveEndMs   = windowEndMs ?? maxMs
+  const effectiveStartMs = selectedDays !== null
+    ? Math.max(minMs, effectiveEndMs - selectedDays * DAY_MS)
+    : minMs
 
   // Filtered statuses (by time window + soldier filter)
   const filteredStatuses = useMemo(() => {
@@ -468,11 +413,8 @@ export function TrendsScreen() {
       />
 
       <div className="flex flex-col flex-1 overflow-hidden" dir="rtl">
-        {/* Toolbar: period tabs + filter button */}
-        <div className="px-4 py-3 flex items-center gap-3">
-          <div className="flex-1">
-            <PeriodTabs value={activeTab} onChange={setActiveTab} />
-          </div>
+        {/* Toolbar: filter button only */}
+        <div className="px-4 py-3 flex items-center justify-end">
           <button
             onClick={() => setFilterOpen(true)}
             className="relative flex items-center justify-center w-[44px] h-[44px] rounded-md hover:bg-surface-high transition-colors"
@@ -497,7 +439,7 @@ export function TrendsScreen() {
           <div className="flex-1 overflow-y-auto px-4 pb-6 flex flex-col gap-6">
             {lineChartData.length === 0 ? (
               <div className="text-center text-on-surface-variant text-sm py-12">
-                אין נתונים ל{activeTab}
+                אין נתונים
               </div>
             ) : (
               <>
@@ -520,10 +462,10 @@ export function TrendsScreen() {
                     <TimeRangeSlider
                       minMs={minMs}
                       maxMs={maxMs}
-                      startMs={effectiveStartMs}
                       endMs={effectiveEndMs}
-                      onStartChange={ms => setWindowStartMs(ms)}
+                      days={selectedDays}
                       onEndChange={ms => setWindowEndMs(ms)}
+                      onDaysChange={handleDaysChange}
                     />
                   </div>
                 )}

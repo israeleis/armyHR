@@ -138,8 +138,11 @@ export function initSyncEngine(getToken: () => string | null) {
 }
 
 export async function refreshPendingCount(): Promise<void> {
-  const count = await db.writeQueue.count()
-  emit({ pendingCount: count })
+  const writes = await db.writeQueue.toArray()
+  for (const w of writes) {
+    if (w.id != null) syncQueueItemToMemory(w as QueuedWrite & { id: number })
+  }
+  emit({ pendingCount: writes.length, items: [...recentItems] })
 }
 
 export function retryItem(id: number): void {

@@ -17,6 +17,7 @@ import {
 import { useSavedViews } from '@/hooks/useSavedViews'
 import { setActiveView, clearActiveView } from '@/contexts/ActiveViewContext'
 import { enqueueWrite } from '@/data/writeQueue'
+import { refreshPendingCount } from '@/data/syncEngine'
 import { getSnapshot, saveSnapshot, applyWriteToSnapshot } from '@/data/localCache'
 import { getSelectedSheet } from '@/features/sheet-picker/SheetPickerScreen'
 import type { StatusEntry, SoldierFields } from '@/domain/types'
@@ -265,6 +266,7 @@ export function DailyDetailScreen() {
       await saveSnapshot(sheet.id, sheetName, updated)
     }
     await enqueueWrite({ spreadsheetId: sheet.id, sheetName, row: entry.sourceCell.row, col: entry.sourceCell.col, oldValue: oldCode, newValue: newCode, soldierName: editingCell?.soldierName ?? '', dateKey: entry.dateKey })
+    refreshPendingCount().catch(console.error)
     setEditingCell(null)
   }
 

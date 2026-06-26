@@ -66,7 +66,9 @@ function AppLayout() {
   // Re-fetch token when cleared mid-session (e.g. 401 handled by clearToken in useDiaryData)
   useEffect(() => {
     if (authReady !== true || isSignedIn || !navigator.onLine || !userEmail) return
-    silentRefresh(userEmail).catch(() => {})
+    silentRefresh(userEmail)
+      .then(ok => { if (!ok) setAuthReady(false) })
+      .catch(() => {})
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn])
 

@@ -43,16 +43,17 @@ const GROUP_BY_OPTIONS: Array<{ key: GroupByKey; label: string }> = [
   { key: 'status', label: 'סטטוס' },
 ]
 
-// Status categories for the 'status' group-by key — aligned with SUMMARY_GROUPS below
+// Status categories for the 'status' group-by key
 const STATUS_LABEL_MAP: Array<{ label: string; codes: Set<string> }> = [
-  { label: 'נוכח',          codes: new Set(['נ']) },
-  { label: 'בדרכים',        codes: new Set(['י', 'ח', 'יח', 'חי', 'מ', 'פ', 'ל']) },
-  { label: 'גימלים',         codes: new Set(['ג']) },
-  { label: 'בבית בתשלום',   codes: new Set(['ת', 'ב']) },
-  { label: 'משוחרר',         codes: new Set(['ש', 'ר', 'ד', 'ז', 'א']) },
+  { label: 'נוכח',         codes: new Set(['נ']) },
+  { label: 'בדרכים',       codes: new Set(['י', 'ח', 'יח', 'חי', 'מ', 'פ', 'ל']) },
+  { label: 'גימלים',        codes: new Set(['ג']) },
+  { label: 'בית',          codes: new Set(['ב', 'חול']) },
+  { label: 'בבית בתשלום',  codes: new Set(['ת']) },
+  { label: 'משוחרר',        codes: new Set(['ש', 'ר', 'ד', 'ז', 'א']) },
 ]
 
-export function getGroupLabel(soldier: SoldierFields, code: string, key: GroupByKey): string {
+function getGroupLabel(soldier: SoldierFields, code: string, key: GroupByKey): string {
   switch (key) {
     case 'unit':   return soldier.unit  || 'ללא יחידה'
     case 'team':   return soldier.team  || 'ללא צוות'
@@ -471,7 +472,7 @@ export function DiaryScreen() {
                   </div>
                   <div className="space-y-1">
                     {previewSoldiers.map(entry => {
-                      const soldier = data.soldiers.find(s => s.id === entry.soldierId)
+                      const soldier = soldierMap.get(entry.soldierId)
                       if (!soldier) return null
                       const initials = soldier.name.trim().split(' ').map(w => w[0]).join('').slice(0, 2)
                       return (
